@@ -11,6 +11,15 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// In qcc-config.php ERWEITERN:
+const FEATURE_FLAGS = array(
+    'use_new_architecture' => false,        // Starte mit Legacy
+    'use_service_container' => true,        // Container ist sicher
+    'enable_performance_monitoring' => true, // Für Debug
+    'use_modular_rendering' => false,       // Später
+    'use_new_calculation_engine' => false   // Später
+);
+
 /**
  * Plugin Configuration Class
  */
