@@ -1,6 +1,8 @@
 <?php
 /**
- * Helper functions for Quality Cost Calculator
+ * Helper functions for Quality Cost Calculator - ERWEITERTE VERSION
+ * 
+ * Integriert bestehende Funktionen mit den aus quality-cost-calculator.php ausgelagerten
  *
  * @package QualityCostCalculator
  * @since 1.1.0
@@ -11,6 +13,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// =============================================================================
+// BESTEHENDE FUNKTIONEN (von der ursprünglichen qcc-functions.php)
+// =============================================================================
+
 /**
  * Get plugin instance - CONFLICT PROTECTED VERSION
  */
@@ -19,25 +25,51 @@ if (!function_exists('qcc')) {
         if (class_exists('QualityCostCalculator')) {
             return QualityCostCalculator::get_instance();
         }
+        // Bootstrap integration
+        if (class_exists('QCC_Bootstrap')) {
+            return QCC_Bootstrap::get_instance();
+        }
         return false;
     }
 }
 
 /**
- * Get plugin option
+ * Get plugin option - ERWEITERT für Bootstrap-Kompatibilität
  */
 if (!function_exists('qcc_get_option')) {
     function qcc_get_option($option_name, $default = '') {
-        return get_option('qcc_' . $option_name, $default);
+        // Support both formats: qcc_get_option('language') and qcc_get_option('default_language')
+        $option_map = array(
+            'language' => 'qcc_default_language',
+            'currency' => 'qcc_default_currency',
+            'unit' => 'qcc_default_unit'
+        );
+        
+        $full_option_name = isset($option_map[$option_name]) 
+            ? $option_map[$option_name] 
+            : 'qcc_' . $option_name;
+            
+        return get_option($full_option_name, $default);
     }
 }
 
 /**
- * Set plugin option
+ * Set plugin option - ERWEITERT für Bootstrap-Kompatibilität
  */
 if (!function_exists('qcc_set_option')) {
     function qcc_set_option($option_name, $value) {
-        return update_option('qcc_' . $option_name, $value);
+        // Support both formats
+        $option_map = array(
+            'language' => 'qcc_default_language',
+            'currency' => 'qcc_default_currency',
+            'unit' => 'qcc_default_unit'
+        );
+        
+        $full_option_name = isset($option_map[$option_name]) 
+            ? $option_map[$option_name] 
+            : 'qcc_' . $option_name;
+            
+        return update_option($full_option_name, $value);
     }
 }
 
@@ -51,14 +83,21 @@ if (!function_exists('qcc_delete_option')) {
 }
 
 /**
- * Log message for debugging
+ * Log message for debugging - ERWEITERT mit mehr Levels
  */
 if (!function_exists('qcc_log')) {
-    function qcc_log($message, $level = 'info') {
+    function qcc_log($message, $level = 'info', $context = array()) {
+        // Only log if debug mode is enabled
+        if (!defined('QCC_DEBUG') || !QCC_DEBUG) {
+            return;
+        }
+        
         if (class_exists('QCC_Debug_Logger')) {
             QCC_Debug_Logger::log($message, strtoupper($level));
-        } elseif (WP_DEBUG && WP_DEBUG_LOG) {
-            error_log("QCC [{$level}]: {$message}");
+        } elseif (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            $timestamp = date('Y-m-d H:i:s');
+            $context_str = !empty($context) ? ' | Context: ' . json_encode($context) : '';
+            error_log("QCC [{$timestamp}] [{$level}]: {$message}{$context_str}");
         }
     }
 }
@@ -104,10 +143,19 @@ if (!function_exists('qcc_validate_percentages')) {
 }
 
 /**
- * Calculate quality costs
+ * Calculate quality costs - ERWEITERT mit Enhanced Validation
  */
 if (!function_exists('qcc_calculate_quality_costs')) {
     function qcc_calculate_quality_costs($revenue, $quality_percentage, $prevention, $appraisal, $internal, $external) {
+        // Enhanced validation
+        if ($revenue <= 0) {
+            return new WP_Error('invalid_revenue', 'Revenue must be positive');
+        }
+        
+        if (!qcc_validate_percentages($prevention, $appraisal, $internal, $external)) {
+            return new WP_Error('invalid_percentages', 'Percentages must add up to 100%');
+        }
+        
         $total_quality_cost = ($revenue * $quality_percentage) / 100;
         
         return array(
@@ -121,24 +169,31 @@ if (!function_exists('qcc_calculate_quality_costs')) {
 }
 
 /**
- * Calculate COGQ and COPQ
+ * Calculate COGQ and COPQ - ERWEITERT mit Ratios
  */
 if (!function_exists('qcc_calculate_cogq_copq')) {
     function qcc_calculate_cogq_copq($costs) {
+        if (is_wp_error($costs)) {
+            return $costs;
+        }
+        
         $cogq = $costs['prevention_cost'] + $costs['appraisal_cost'];
         $copq = $costs['internal_defect_cost'] + $costs['external_defect_cost'];
+        $total = $costs['total_quality_cost'];
         
         return array(
             'cogq' => $cogq,
             'copq' => $copq,
-            'cogq_percentage' => ($cogq / $costs['total_quality_cost']) * 100,
-            'copq_percentage' => ($copq / $costs['total_quality_cost']) * 100
+            'cogq_percentage' => $total > 0 ? ($cogq / $total) * 100 : 0,
+            'copq_percentage' => $total > 0 ? ($copq / $total) * 100 : 0,
+            'cogq_ratio' => $copq > 0 ? $cogq / $copq : 0,
+            'quality_index' => $total > 0 ? ($cogq / $total) : 0
         );
     }
 }
 
 /**
- * Calculate opportunity costs
+ * Calculate opportunity costs - ERWEITERT mit Total
  */
 if (!function_exists('qcc_calculate_opportunity_costs')) {
     function qcc_calculate_opportunity_costs($revenue, $lost_sales, $customer_churn, $market_share, $productivity) {
@@ -146,36 +201,84 @@ if (!function_exists('qcc_calculate_opportunity_costs')) {
             'lost_sales_cost' => ($revenue * $lost_sales) / 100,
             'customer_churn_cost' => ($revenue * $customer_churn) / 100,
             'market_share_cost' => ($revenue * $market_share) / 100,
-            'productivity_cost' => ($revenue * $productivity) / 100
+            'productivity_cost' => ($revenue * $productivity) / 100,
+            'total_opportunity_cost' => ($revenue * ($lost_sales + $customer_churn + $market_share + $productivity)) / 100
         );
     }
 }
 
+// =============================================================================
+// NEUE FUNKTIONEN (aus quality-cost-calculator.php Bootstrap ausgelagert)
+// =============================================================================
+
 /**
- * Format currency amount
+ * Format currency value with unit (aus Bootstrap ausgelagert)
+ */
+if (!function_exists('qcc_format_currency_with_unit')) {
+    function qcc_format_currency_with_unit($value, $currency = 'EUR', $unit = '1000000') {
+        $symbols = array(
+            'EUR' => '€',
+            'USD' => '$',
+            'CNY' => '¥'
+        );
+        
+        $symbol = $symbols[$currency] ?? $currency;
+        $unit_label = $unit == '1000000' ? 'M' : 'B';
+        $formatted = number_format($value / intval($unit), 2, '.', ',');
+        
+        return $formatted . ' ' . $symbol . ' ' . $unit_label;
+    }
+}
+
+/**
+ * Format currency amount - ERWEITERT
  */
 if (!function_exists('qcc_format_currency')) {
     function qcc_format_currency($amount, $currency = 'EUR', $language = 'en', $unit = 1000000) {
-        $formatted_amount = number_format($amount / $unit, 2);
+        // Support both string and numeric unit values
+        $unit_value = is_string($unit) ? intval($unit) : $unit;
+        $formatted_amount = number_format($amount / $unit_value, 2);
+        
+        // Get currency symbol
+        $symbol = qcc_get_currency_symbol($currency);
         
         // Language-specific formatting
         switch ($language) {
             case 'de':
-                $formatted_amount = number_format($amount / $unit, 2, ',', '.');
-                return $formatted_amount . ' ' . $currency;
+                $formatted_amount = number_format($amount / $unit_value, 2, ',', '.');
+                return $formatted_amount . ' ' . $symbol;
             case 'fr':
-                $formatted_amount = number_format($amount / $unit, 2, ',', ' ');
-                return $formatted_amount . ' ' . $currency;
+                $formatted_amount = number_format($amount / $unit_value, 2, ',', ' ');
+                return $formatted_amount . ' ' . $symbol;
             case 'zh':
-                return $currency . ' ' . number_format($amount / $unit, 2);
+                return $symbol . ' ' . number_format($amount / $unit_value, 2);
             default:
-                return $currency . ' ' . number_format($amount / $unit, 2);
+                return $symbol . ' ' . number_format($amount / $unit_value, 2);
         }
     }
 }
 
 /**
- * Get unit name in different languages
+ * Get currency symbol - NEU
+ */
+if (!function_exists('qcc_get_currency_symbol')) {
+    function qcc_get_currency_symbol($currency) {
+        $symbols = array(
+            'EUR' => '€',
+            'USD' => '$',
+            'CNY' => '¥',
+            'GBP' => '£',
+            'JPY' => '¥',
+            'CHF' => 'Fr',
+            'CAD' => 'C$'
+        );
+        
+        return $symbols[$currency] ?? $currency;
+    }
+}
+
+/**
+ * Get unit name in different languages - ERWEITERT
  */
 if (!function_exists('qcc_get_unit_name')) {
     function qcc_get_unit_name($unit, $language = 'en') {
@@ -203,7 +306,23 @@ if (!function_exists('qcc_get_unit_name')) {
 }
 
 /**
- * Sanitize calculator input
+ * Get unit label - NEU (aus Bootstrap)
+ */
+if (!function_exists('qcc_get_unit_label')) {
+    function qcc_get_unit_label($unit, $language = 'en') {
+        $labels = array(
+            'en' => array('1000000' => 'M', '1000000000' => 'B'),
+            'de' => array('1000000' => 'Mio', '1000000000' => 'Mrd'),
+            'fr' => array('1000000' => 'M', '1000000000' => 'Md'),
+            'zh' => array('1000000' => '百万', '1000000000' => '十亿')
+        );
+        
+        return $labels[$language][$unit] ?? ($unit == '1000000' ? 'M' : 'B');
+    }
+}
+
+/**
+ * Sanitize calculator input - ERWEITERT
  */
 if (!function_exists('qcc_sanitize_input')) {
     function qcc_sanitize_input($input, $type = 'number') {
@@ -214,10 +333,10 @@ if (!function_exists('qcc_sanitize_input')) {
                 $value = floatval($input);
                 return max(0, min(100, $value)); // Clamp between 0-100
             case 'language':
-                $allowed = array('en', 'de', 'fr', 'zh');
+                $allowed = array('en', 'de', 'fr', 'es', 'zh');
                 return in_array($input, $allowed) ? $input : 'en';
             case 'currency':
-                $allowed = array('EUR', 'USD', 'CNY');
+                $allowed = array('EUR', 'USD', 'CNY', 'GBP', 'JPY');
                 return in_array($input, $allowed) ? $input : 'EUR';
             case 'unit':
                 $allowed = array('1000000', '1000000000');
@@ -227,6 +346,59 @@ if (!function_exists('qcc_sanitize_input')) {
         }
     }
 }
+
+/**
+ * Sanitize all calculator inputs - NEU (aus Bootstrap)
+ */
+if (!function_exists('qcc_sanitize_calculator_input')) {
+    function qcc_sanitize_calculator_input($input) {
+        return array(
+            'revenue' => max(0, floatval($input['revenue'] ?? 140)),
+            'quality_percentage' => max(0, min(100, floatval($input['quality_percentage'] ?? 6))),
+            'prevention' => max(0, min(100, floatval($input['prevention'] ?? 10))),
+            'appraisal' => max(0, min(100, floatval($input['appraisal'] ?? 20))),
+            'internal_defect' => max(0, min(100, floatval($input['internal_defect'] ?? 30))),
+            'external_defect' => max(0, min(100, floatval($input['external_defect'] ?? 40))),
+            'language' => qcc_sanitize_input($input['language'] ?? 'en', 'language'),
+            'currency' => qcc_sanitize_input($input['currency'] ?? 'EUR', 'currency'),
+            'unit' => qcc_sanitize_input($input['unit'] ?? '1000000', 'unit')
+        );
+    }
+}
+
+/**
+ * Sanitize language code - NEU
+ */
+if (!function_exists('qcc_sanitize_language')) {
+    function qcc_sanitize_language($language) {
+        $allowed = array('en', 'de', 'fr', 'es', 'zh');
+        return in_array($language, $allowed) ? $language : 'en';
+    }
+}
+
+/**
+ * Sanitize currency code - NEU
+ */
+if (!function_exists('qcc_sanitize_currency')) {
+    function qcc_sanitize_currency($currency) {
+        $allowed = array('EUR', 'USD', 'CNY', 'GBP', 'JPY');
+        return in_array($currency, $allowed) ? $currency : 'EUR';
+    }
+}
+
+/**
+ * Sanitize unit value - NEU
+ */
+if (!function_exists('qcc_sanitize_unit')) {
+    function qcc_sanitize_unit($unit) {
+        $allowed = array('1000000', '1000000000');
+        return in_array($unit, $allowed) ? $unit : '1000000';
+    }
+}
+
+// =============================================================================
+// SYSTEM & DEBUG FUNKTIONEN (erweitert)
+// =============================================================================
 
 /**
  * Get system requirements status
@@ -298,6 +470,73 @@ if (!function_exists('qcc_convert_to_bytes')) {
 }
 
 /**
+ * Check required classes - NEU (aus Bootstrap)
+ */
+if (!function_exists('qcc_check_required_classes')) {
+    function qcc_check_required_classes() {
+        $required_classes = array(
+            'QCC_Bootstrap',
+            'QCC_Shortcode',
+            'QCC_Calculator',
+            'QCC_Validator',
+            'QCC_Admin'
+        );
+        
+        $status = array();
+        foreach ($required_classes as $class) {
+            $status[$class] = class_exists($class) ? 'Loaded' : 'Missing';
+        }
+        
+        return $status;
+    }
+}
+
+/**
+ * Check file permissions - NEU (aus Bootstrap)
+ */
+if (!function_exists('qcc_check_file_permissions')) {
+    function qcc_check_file_permissions() {
+        $directories = array(
+            'includes' => QCC_PLUGIN_PATH . 'includes',
+            'templates' => QCC_PLUGIN_PATH . 'templates',
+            'assets' => QCC_PLUGIN_PATH . 'assets'
+        );
+        
+        $status = array();
+        foreach ($directories as $name => $path) {
+            $status[$name] = array(
+                'exists' => is_dir($path),
+                'readable' => is_readable($path),
+                'writable' => is_writable($path)
+            );
+        }
+        
+        return $status;
+    }
+}
+
+/**
+ * Get plugin status information - ERWEITERT
+ */
+if (!function_exists('qcc_get_plugin_status')) {
+    function qcc_get_plugin_status() {
+        $status = array(
+            'plugin_version' => defined('QCC_PLUGIN_VERSION') ? QCC_PLUGIN_VERSION : 'Unknown',
+            'wp_version' => get_bloginfo('version'),
+            'php_version' => PHP_VERSION,
+            'memory_usage' => size_format(memory_get_usage(true)),
+            'debug_mode' => defined('QCC_DEBUG') && QCC_DEBUG ? 'Enabled' : 'Disabled',
+            'shortcode_exists' => shortcode_exists('quality_cost_calculator') ? 'Yes' : 'No',
+            'required_classes' => qcc_check_required_classes(),
+            'file_permissions' => qcc_check_file_permissions(),
+            'bootstrap_loaded' => class_exists('QCC_Bootstrap') ? 'Yes' : 'No'
+        );
+        
+        return $status;
+    }
+}
+
+/**
  * Generate nonce for AJAX requests
  */
 if (!function_exists('qcc_get_ajax_nonce')) {
@@ -336,7 +575,24 @@ if (!function_exists('qcc_remove_directory_recursive')) {
 }
 
 /**
- * Clean up plugin data on uninstall
+ * Clear all plugin cache - NEU (aus Bootstrap)
+ */
+if (!function_exists('qcc_clear_all_cache')) {
+    function qcc_clear_all_cache() {
+        global $wpdb;
+        
+        $wpdb->query(
+            "DELETE FROM {$wpdb->options} 
+             WHERE option_name LIKE '_transient_qcc_%' 
+             OR option_name LIKE '_transient_timeout_qcc_%'"
+        );
+        
+        qcc_log('All cache cleared', 'cache');
+    }
+}
+
+/**
+ * Clean up plugin data on uninstall - ERWEITERT
  */
 if (!function_exists('qcc_cleanup_plugin_data')) {
     function qcc_cleanup_plugin_data() {
@@ -344,14 +600,16 @@ if (!function_exists('qcc_cleanup_plugin_data')) {
             qcc_log('Starting plugin data cleanup', 'cleanup');
         }
         
-        // Remove options
+        // Remove options (erweiterte Liste)
         $options = array(
             'qcc_default_language',
             'qcc_default_currency',
             'qcc_default_unit',
             'qcc_version',
             'qcc_db_version',
-            'qcc_activation_time'
+            'qcc_activation_time',
+            'qcc_feature_flags',
+            'qcc_activated'
         );
         
         foreach ($options as $option) {
@@ -359,21 +617,17 @@ if (!function_exists('qcc_cleanup_plugin_data')) {
         }
         
         // Remove transients
-        global $wpdb;
-        $wpdb->query(
-            $wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-                '_transient_qcc_%',
-                '_transient_timeout_qcc_%'
-            )
-        );
+        qcc_clear_all_cache();
         
-        // Remove assets directory
+        // Remove assets directory (erweiterte Liste)
         $upload_dir = wp_upload_dir();
         $assets_dirs = array(
             $upload_dir['basedir'] . '/quality-cost-calculator-cache',
             $upload_dir['basedir'] . '/quality-cost-calculator-exports',
-            $upload_dir['basedir'] . '/quality-cost-calculator-temp'
+            $upload_dir['basedir'] . '/quality-cost-calculator-temp',
+            $upload_dir['basedir'] . '/qcc-cache',
+            $upload_dir['basedir'] . '/qcc-exports',
+            $upload_dir['basedir'] . '/qcc-temp'
         );
         
         foreach ($assets_dirs as $dir) {
@@ -389,7 +643,7 @@ if (!function_exists('qcc_cleanup_plugin_data')) {
 }
 
 /**
- * Get plugin health status
+ * Get plugin health status - ERWEITERT
  */
 if (!function_exists('qcc_get_health_status')) {
     function qcc_get_health_status() {
@@ -403,6 +657,12 @@ if (!function_exists('qcc_get_health_status')) {
         if (!function_exists('qcc') || !qcc()) {
             $status['overall'] = 'critical';
             $status['issues'][] = 'Plugin not properly initialized';
+        }
+        
+        // Check Bootstrap status
+        if (!class_exists('QCC_Bootstrap')) {
+            $status['overall'] = 'warning';
+            $status['issues'][] = 'Bootstrap class not loaded';
         }
         
         // Check system requirements
@@ -423,8 +683,9 @@ if (!function_exists('qcc_get_health_status')) {
         $status['details'] = array(
             'plugin_version' => defined('QCC_PLUGIN_VERSION') ? QCC_PLUGIN_VERSION : 'Unknown',
             'memory_usage' => size_format(memory_get_usage(true)),
-            'debug_mode' => defined('WP_DEBUG') && WP_DEBUG ? 'Enabled' : 'Disabled',
-            'shortcode_exists' => shortcode_exists('quality_cost_calculator') ? 'Yes' : 'No'
+            'debug_mode' => defined('QCC_DEBUG') && QCC_DEBUG ? 'Enabled' : 'Disabled',
+            'shortcode_exists' => shortcode_exists('quality_cost_calculator') ? 'Yes' : 'No',
+            'bootstrap_loaded' => class_exists('QCC_Bootstrap') ? 'Yes' : 'No'
         );
         
         return $status;
@@ -432,7 +693,7 @@ if (!function_exists('qcc_get_health_status')) {
 }
 
 /**
- * Emergency function to reset plugin settings
+ * Emergency function to reset plugin settings - ERWEITERT
  */
 if (!function_exists('qcc_emergency_reset')) {
     function qcc_emergency_reset() {
@@ -444,13 +705,22 @@ if (!function_exists('qcc_emergency_reset')) {
             qcc_log('Emergency reset initiated', 'emergency');
         }
         
-        // Reset to default options
+        // Reset to default options (erweiterte Liste)
         $defaults = array(
             'default_language' => 'en',
             'default_currency' => 'EUR',
             'default_unit' => '1000000',
             'enable_caching' => true,
-            'debug_mode' => false
+            'debug_mode' => false,
+            'feature_flags' => array(
+                'use_new_shortcode_architecture' => false,
+                'use_service_container' => true,
+                'enable_performance_monitoring' => false,
+                'use_modular_rendering' => false,
+                'enable_advanced_caching' => true,
+                'use_new_calculation_engine' => false,
+                'enable_auto_setup' => true
+            )
         );
         
         foreach ($defaults as $option => $value) {
@@ -458,14 +728,7 @@ if (!function_exists('qcc_emergency_reset')) {
         }
         
         // Clear all transients
-        global $wpdb;
-        $wpdb->query(
-            $wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-                '_transient_qcc_%',
-                '_transient_timeout_qcc_%'
-            )
-        );
+        qcc_clear_all_cache();
         
         if (function_exists('qcc_log')) {
             qcc_log('Emergency reset completed', 'emergency');
@@ -476,13 +739,13 @@ if (!function_exists('qcc_emergency_reset')) {
 }
 
 // =============================================================================
-// EMERGENCY RESET CAPABILITY - SHORTENED
+// EMERGENCY RESET CAPABILITY - BESTEHEND (unverändert)
 // =============================================================================
 
 // Add emergency reset capability via URL parameter (admin only)
 if (is_admin() && isset($_GET['qcc_emergency_reset']) && current_user_can('administrator')) {
     add_action('admin_init', function() {
-        if ($_GET['qcc_emergency_reset'] === 'confirm' && wp_verify_nonce($_GET['_wpnonce'], 'qcc_emergency_reset')) {
+        if ($_GET['qcc_emergency_reset'] === 'confirm' && wp_verify_nonce($_GET['_wpnonce'] ?? '', 'qcc_emergency_reset')) {
             if (qcc_emergency_reset()) {
                 wp_redirect(admin_url('plugins.php?qcc_reset=success'));
                 exit;
@@ -500,9 +763,9 @@ if (is_admin() && isset($_GET['qcc_reset']) && $_GET['qcc_reset'] === 'success')
     });
 }
 
-// Log that functions file has been loaded
+// Log that functions file has been loaded - ERWEITERT
 if (function_exists('qcc_log')) {
-    qcc_log('QCC Functions file loaded successfully - Shortcode conflicts resolved', 'functions');
+    qcc_log('QCC Functions file loaded successfully - Enhanced with Bootstrap integration', 'functions');
 }
 
 // NOTE: SHORTCODE FUNCTIONALITY REMOVED FROM THIS FILE
