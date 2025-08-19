@@ -1,21 +1,9 @@
 <?php
 /**
- * QCC Bootstrap Class — Consolidated (cleaned)
+ * QCC Bootstrap - Neue Hauptarchitektur
  * 
- * This file merges the two previous variants:
- * - class-qcc-bootstrap.php (modern)
- * - class-qcc-bootstrap - ausgelagert.php (legacy/extracted)
+ * SPEICHERN ALS: wp-content/plugins/quality-cost-calculator/includes/core/class-qcc-bootstrap.php
  * 
- * Strategy: Keep the modern architecture and hooks.
- * Legacy-only helpers were removed unless still referenced.
- * 
- * Date: 2025-08-18
- */
-
-
-/**
- * QCC Bootstrap Class - Modern Plugin Initialization
- *
  * @package QualityCostCalculator
  * @since 2.0.0
  */
@@ -26,44 +14,30 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Bootstrap Class for Quality Cost Calculator
- * 
- * Handles plugin initialization, service loading, and lifecycle management
+ * QCC Bootstrap Class - Moderne Architektur
  */
 class QCC_Bootstrap {
     
     /**
-     * Plugin instance
-     * 
+     * Single instance
      * @var QCC_Bootstrap|null
      */
     private static $instance = null;
     
     /**
      * Service container
-     * 
      * @var QCC_Service_Container|null
      */
     private $container = null;
     
     /**
-     * Plugin initialization status
-     * 
+     * Initialization status
      * @var bool
      */
     private $initialized = false;
     
     /**
-     * Feature flags
-     * 
-     * @var array
-     */
-    private $feature_flags = array();
-    
-    /**
      * Get singleton instance
-     * 
-     * @return QCC_Bootstrap
      */
     public static function get_instance() {
         if (self::$instance === null) {
@@ -73,17 +47,7 @@ class QCC_Bootstrap {
     }
     
     /**
-     * Private constructor to prevent direct instantiation
-     */
-    private function __construct() {
-        // Initialize feature flags
-        $this->load_feature_flags();
-    }
-    
-    /**
-     * Initialize the plugin
-     * 
-     * @return bool True on success, false on failure
+     * Initialize the plugin (called from main file)
      */
     public static function initialize() {
         $instance = self::get_instance();
@@ -92,8 +56,6 @@ class QCC_Bootstrap {
     
     /**
      * Main initialization method
-     * 
-     * @return bool
      */
     private function init() {
         if ($this->initialized) {
@@ -101,72 +63,34 @@ class QCC_Bootstrap {
         }
         
         try {
-            // Load essential services
-            $this->load_core_services();
-            
-            // Load text domain
-            $this->load_textdomain();
+            // Load service container
+            $this->init_service_container();
             
             // Setup WordPress hooks
             $this->setup_hooks();
             
-            // Initialize services based on context
-            $this->initialize_context_services();
+            // Register shortcodes
+            $this->register_shortcodes();
             
             $this->initialized = true;
             
-            // Log successful initialization in debug mode
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('QCC: Bootstrap initialization completed successfully');
+            if (QCC_DEBUG) {
+                error_log('QCC Bootstrap: Neue Architektur erfolgreich initialisiert');
             }
             
             return true;
             
         } catch (Exception $e) {
-            error_log('QCC: Bootstrap initialization failed - ' . $e->getMessage());
-            return false;
+            error_log('QCC Bootstrap Error: ' . $e->getMessage());
+            return $this->emergency_fallback();
         }
     }
     
     /**
-     * Load feature flags from options
+     * Initialize service container
      */
-    private function load_feature_flags() {
-        $default_flags = array(
-            'use_new_shortcode_architecture' => false,
-            'use_service_container' => true,
-            'enable_performance_monitoring' => defined('WP_DEBUG') && WP_DEBUG,
-            'use_modular_rendering' => false,
-            'enable_advanced_caching' => true,
-            'use_new_calculation_engine' => false
-        );
-        
-        $saved_flags = get_option('qcc_feature_flags', array());
-        $this->feature_flags = array_merge($default_flags, $saved_flags);
-    }
-    
-    /**
-     * Load core services
-     */
-    private function load_core_services() {
-        // Load service container if enabled
-        if ($this->get_feature_flag('use_service_container')) {
-            $this->load_service_container();
-        }
-        
-        // Load configuration service
-        $this->load_configuration_service();
-        
-        // Load performance monitoring if enabled
-        if ($this->get_feature_flag('enable_performance_monitoring')) {
-            $this->load_performance_monitor();
-        }
-    }
-    
-    /**
-     * Load service container
-     */
-    private function load_service_container() {
+    private function init_service_container() {
+        // Load service container if not already loaded
         if (!class_exists('QCC_Service_Container')) {
             $container_file = QCC_PLUGIN_PATH . 'includes/core/class-qcc-service-container.php';
             if (file_exists($container_file)) {
@@ -176,90 +100,30 @@ class QCC_Bootstrap {
         
         if (class_exists('QCC_Service_Container')) {
             $this->container = new QCC_Service_Container();
+            
+            // Register core services
             $this->register_core_services();
         }
     }
     
     /**
-     * Register core services in container
+     * Register core services
      */
     private function register_core_services() {
-        if (!$this->container) {
-            return;
-        }
-        
-        // Register configuration service
-        $this->container->register('config', function() {
-            return new QCC_Configuration();
+        // Calculator service
+        $this->container->register('calculator', function() {
+            return $this->create_calculator_service();
         });
         
-        // Register translation service
-        $this->container->register('translator', function() {
-            return new QCC_Translation_Service();
+        // Validator service
+        $this->container->register('validator', function() {
+            return $this->create_validator_service();
         });
         
-        // Register shortcode controller (conditional)
-        if ($this->get_feature_flag('use_new_shortcode_architecture')) {
-            $this->container->register('shortcode_controller', function() {
-                return new QCC_Shortcode_Controller();
-            });
-        } else {
-            $this->container->register('shortcode_controller', function() {
-                return new QCC_Shortcode_Legacy();
-            });
-        }
-        
-        // Register calculation engine (conditional)
-        if ($this->get_feature_flag('use_new_calculation_engine')) {
-            $this->container->register('calculation_engine', function() {
-                return new QCC_Calculation_Engine();
-            });
-        }
-    }
-    
-    /**
-     * Load configuration service
-     */
-    private function load_configuration_service() {
-        if (!class_exists('QCC_Configuration')) {
-            $config_service_file = QCC_PLUGIN_PATH . 'includes/services/class-qcc-configuration.php';
-            if (file_exists($config_service_file)) {
-                require_once $config_service_file;
-            }
-        }
-    }
-    
-    /**
-     * Load performance monitor
-     */
-    private function load_performance_monitor() {
-        if (!class_exists('QCC_Performance_Monitor')) {
-            $monitor_file = QCC_PLUGIN_PATH . 'includes/monitoring/class-qcc-performance-monitor.php';
-            if (file_exists($monitor_file)) {
-                require_once $monitor_file;
-                QCC_Performance_Monitor::start_tracking();
-            }
-        }
-    }
-    
-    /**
-     * Load text domain for internationalization
-     */
-    private function load_textdomain() {
-        $domain = QCC_TEXT_DOMAIN;
-        $locale = apply_filters('plugin_locale', get_locale(), $domain);
-        
-        // Try WordPress languages directory first
-        $wp_lang_file = WP_LANG_DIR . "/plugins/{$domain}-{$locale}.mo";
-        if (file_exists($wp_lang_file)) {
-            load_textdomain($domain, $wp_lang_file);
-            return;
-        }
-        
-        // Fallback to plugin languages directory
-        // Use plugin basename to build relative languages path for translations
-        $plugin_lang_dir = dirname(QCC_PLUGIN_BASENAME) . '/languages/';
-        load_plugin_textdomain($domain, false, $plugin_lang_dir);
+        // Renderer service
+        $this->container->register('renderer', function() {
+            return $this->create_renderer_service();
+        });
     }
     
     /**
@@ -268,599 +132,406 @@ class QCC_Bootstrap {
     private function setup_hooks() {
         // Frontend hooks
         if (!is_admin()) {
-            add_action('wp_enqueue_scripts', array($this, 'maybe_enqueue_frontend_assets'));
-            add_action('wp_head', array($this, 'add_frontend_meta'));
+            add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
         }
         
         // Admin hooks
         if (is_admin()) {
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
-            add_action('admin_menu', array($this, 'register_admin_pages'));
-            add_action('admin_init', array($this, 'register_settings'));
+            add_action('admin_menu', array($this, 'register_admin_menu'));
         }
         
         // AJAX hooks
         add_action('wp_ajax_qcc_calculate', array($this, 'handle_ajax_calculation'));
         add_action('wp_ajax_nopriv_qcc_calculate', array($this, 'handle_ajax_calculation'));
-        
-        // Shortcode registration
-        add_action('init', array($this, 'register_shortcodes'));
-    }
-    
-    /**
-     * Initialize services based on current context
-     */
-    private function initialize_context_services() {
-        if (is_admin()) {
-            $this->initialize_admin_services();
-        } else {
-            $this->initialize_frontend_services();
-        }
-        
-        // Initialize services needed in both contexts
-        $this->initialize_shared_services();
-    }
-    
-    /**
-     * Initialize admin-specific services
-     */
-    private function initialize_admin_services() {
-        // Load admin controller
-        if (!class_exists('QCC_Admin_Controller')) {
-            $admin_file = QCC_PLUGIN_PATH . 'includes/admin/class-qcc-admin-controller.php';
-            if (file_exists($admin_file)) {
-                require_once $admin_file;
-            }
-        }
-        
-        // Initialize admin controller
-        if (class_exists('QCC_Admin_Controller')) {
-            if ($this->container) {
-                $this->container->register('admin_controller', function() {
-                    return new QCC_Admin_Controller();
-                });
-            }
-        }
-    }
-    
-    /**
-     * Initialize frontend-specific services
-     */
-    private function initialize_frontend_services() {
-        // Only load frontend services if shortcode is present on current page
-        global $post;
-        if (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'quality_cost_calculator')) {
-            $this->load_shortcode_services();
-        }
-    }
-    
-    /**
-     * Load shortcode-related services
-     */
-    private function load_shortcode_services() {
-        if ($this->get_feature_flag('use_new_shortcode_architecture')) {
-            $this->load_new_shortcode_services();
-        } else {
-            $this->load_legacy_shortcode_services();
-        }
-    }
-    
-    /**
-     * Load new modular shortcode services
-     */
-    private function load_new_shortcode_services() {
-        $services = array(
-            'QCC_Shortcode_Controller' => 'presentation/class-qcc-shortcode-controller.php',
-            'QCC_HTML_Orchestrator' => 'rendering/orchestration/class-qcc-html-orchestrator.php',
-            'QCC_Translation_Service' => 'translation/class-qcc-translation-service.php'
-        );
-        
-        foreach ($services as $class => $file) {
-            if (!class_exists($class)) {
-                $full_path = QCC_PLUGIN_PATH . 'includes/' . $file;
-                if (file_exists($full_path)) {
-                    require_once $full_path;
-                }
-            }
-        }
-    }
-    
-    /**
-     * Load legacy shortcode services
-     */
-    private function load_legacy_shortcode_services() {
-        if (!class_exists('QCC_Shortcode_Legacy')) {
-            $legacy_file = QCC_PLUGIN_PATH . 'includes/legacy/class-qcc-shortcode-legacy.php';
-            if (file_exists($legacy_file)) {
-                require_once $legacy_file;
-            } else {
-                // Fallback to current shortcode file
-                $current_file = QCC_PLUGIN_PATH . 'includes/class-qcc-shortcode.php';
-                if (file_exists($current_file)) {
-                    require_once $current_file;
-                }
-            }
-        }
-    }
-    
-    /**
-     * Initialize shared services
-     */
-    private function initialize_shared_services() {
-        // Services needed in both admin and frontend contexts
-        
-        // Translation service
-        if (!class_exists('QCC_Translation_Service')) {
-            $translation_file = QCC_PLUGIN_PATH . 'includes/translation/class-qcc-translation-service.php';
-            if (file_exists($translation_file)) {
-                require_once $translation_file;
-            }
-        }
     }
     
     /**
      * Register shortcodes
      */
-    public function register_shortcodes() {
-        $shortcode_controller = $this->get_service('shortcode_controller');
+    private function register_shortcodes() {
+        // Main shortcode
+        add_shortcode('quality_cost_calculator', array($this, 'render_shortcode'));
         
-        if ($shortcode_controller) {
-            add_shortcode('quality_cost_calculator', array($shortcode_controller, 'render'));
-        } else {
-            // Fallback shortcode registration
-            add_shortcode('quality_cost_calculator', array($this, 'fallback_shortcode_render'));
+        // Alternative shortcodes
+        add_shortcode('qcc_calculator', array($this, 'render_shortcode'));
+        add_shortcode('cost_quality_calculator', array($this, 'render_shortcode'));
+        
+        if (QCC_DEBUG) {
+            error_log('QCC Bootstrap: Shortcodes erfolgreich registriert');
         }
     }
     
     /**
-     * Fallback shortcode render method
+     * Render shortcode
      */
-    public function fallback_shortcode_render($atts) {
-        return '<div class="qcc-error">' . 
-               __('Quality Cost Calculator is currently unavailable. Please check plugin configuration.', 'quality-cost-calculator') . 
-               '</div>';
+    public function render_shortcode($atts = array(), $content = '') {
+        try {
+            $renderer = $this->container ? $this->container->get('renderer') : null;
+            
+            if ($renderer) {
+                return $renderer->render($atts, $content);
+            }
+            
+            // Fallback rendering
+            return $this->render_basic_calculator($atts);
+            
+        } catch (Exception $e) {
+            if (QCC_DEBUG) {
+                error_log('QCC Shortcode Error: ' . $e->getMessage());
+            }
+            return $this->render_error_message($e->getMessage());
+        }
     }
     
     /**
-     * Maybe enqueue frontend assets
+     * Handle AJAX calculation
      */
-    public function maybe_enqueue_frontend_assets() {
-        global $post;
-        
-        if (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'quality_cost_calculator')) {
-            $this->enqueue_frontend_assets();
+    public function handle_ajax_calculation() {
+        try {
+            // Verify nonce
+            if (!wp_verify_nonce($_POST['nonce'], 'qcc_nonce')) {
+                wp_die('Security check failed');
+            }
+            
+            // Get calculator service
+            $calculator = $this->container ? $this->container->get('calculator') : null;
+            
+            if (!$calculator) {
+                $calculator = $this->create_calculator_service();
+            }
+            
+            // Prepare input data
+            $input_data = array(
+                'revenue' => floatval($_POST['revenue']),
+                'quality_basis' => floatval($_POST['quality_basis']),
+                'prevention' => floatval($_POST['prevention']),
+                'appraisal' => floatval($_POST['appraisal']),
+                'internal_defect' => floatval($_POST['internal_defect']),
+                'external_defect' => floatval($_POST['external_defect'])
+            );
+            
+            // Calculate results
+            $results = $calculator->calculate($input_data);
+            
+            wp_send_json_success($results);
+            
+        } catch (Exception $e) {
+            wp_send_json_error(array(
+                'message' => $e->getMessage()
+            ));
         }
     }
     
     /**
      * Enqueue frontend assets
      */
-    private function enqueue_frontend_assets() {
-        // Chart.js from CDN
-        wp_enqueue_script(
-            'chart-js',
-            'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js',
-            array(),
-            '3.9.1',
-            true
-        );
+    public function enqueue_frontend_assets() {
+        if (!$this->should_load_frontend_assets()) {
+            return;
+        }
         
-        // Plugin JavaScript
-        wp_enqueue_script(
-            'qcc-frontend',
-            QCC_PLUGIN_URL . 'assets/quality-cost-calculator.js',
-            array('jquery', 'chart-js'),
-            QCC_PLUGIN_VERSION,
-            true
-        );
+        // CSS
+        $css_file = QCC_PLUGIN_URL . 'assets/quality-cost-calculator.css';
+        if (file_exists(QCC_PLUGIN_PATH . 'assets/quality-cost-calculator.css')) {
+            wp_enqueue_style('qcc-frontend', $css_file, array(), QCC_PLUGIN_VERSION);
+        }
         
-        // Plugin CSS
-        wp_enqueue_style(
-            'qcc-frontend',
-            QCC_PLUGIN_URL . 'assets/quality-cost-calculator.css',
-            array(),
-            QCC_PLUGIN_VERSION
-        );
-        
-        // Localize script
-        wp_localize_script('qcc-frontend', 'qcc_ajax', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('qcc_nonce'),
-            'debug' => defined('WP_DEBUG') && WP_DEBUG,
-            'version' => QCC_PLUGIN_VERSION,
-            'feature_flags' => $this->get_public_feature_flags()
-        ));
+        // JavaScript
+        $js_file = QCC_PLUGIN_URL . 'assets/quality-cost-calculator.js';
+        if (file_exists(QCC_PLUGIN_PATH . 'assets/quality-cost-calculator.js')) {
+            wp_enqueue_script('qcc-frontend', $js_file, array('jquery'), QCC_PLUGIN_VERSION, true);
+            
+            // Localize script
+            wp_localize_script('qcc-frontend', 'qcc_config', array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('qcc_nonce'),
+                'strings' => array(
+                    'calculating' => __('Calculating...', QCC_TEXT_DOMAIN),
+                    'error' => __('Calculation failed', QCC_TEXT_DOMAIN)
+                )
+            ));
+        }
     }
     
     /**
-     * Add frontend meta information
+     * Create calculator service
      */
-    public function add_frontend_meta() {
+    private function create_calculator_service() {
+        // Use existing calculator if available
+        if (class_exists('QCC_Calculation_Engine')) {
+            return new QCC_Calculation_Engine();
+        }
+        
+        // Create basic calculator
+        return new class {
+            public function calculate($data) {
+                $revenue = $data['revenue'];
+                $quality_basis = $data['quality_basis'] / 100;
+                
+                $total_quality_costs = $revenue * $quality_basis;
+                
+                $prevention_cost = $total_quality_costs * ($data['prevention'] / 100);
+                $appraisal_cost = $total_quality_costs * ($data['appraisal'] / 100);
+                $internal_cost = $total_quality_costs * ($data['internal_defect'] / 100);
+                $external_cost = $total_quality_costs * ($data['external_defect'] / 100);
+                
+                return array(
+                    'total_quality_costs' => round($total_quality_costs, 2),
+                    'cogq' => round($prevention_cost + $appraisal_cost, 2),
+                    'copq' => round($internal_cost + $external_cost, 2),
+                    'prevention_cost' => round($prevention_cost, 2),
+                    'appraisal_cost' => round($appraisal_cost, 2),
+                    'internal_defect_cost' => round($internal_cost, 2),
+                    'external_defect_cost' => round($external_cost, 2)
+                );
+            }
+        };
+    }
+    
+    /**
+     * Create validator service
+     */
+    private function create_validator_service() {
+        return new class {
+            private $errors = array();
+            
+            public function validate($data) {
+                $this->errors = array();
+                
+                if (!is_numeric($data['revenue']) || $data['revenue'] < 0) {
+                    $this->errors[] = 'Revenue must be a positive number';
+                }
+                
+                $percentages = array('quality_basis', 'prevention', 'appraisal', 'internal_defect', 'external_defect');
+                foreach ($percentages as $field) {
+                    if (!is_numeric($data[$field]) || $data[$field] < 0 || $data[$field] > 100) {
+                        $this->errors[] = $field . ' must be between 0 and 100';
+                    }
+                }
+                
+                return empty($this->errors);
+            }
+            
+            public function get_errors() {
+                return $this->errors;
+            }
+        };
+    }
+    
+    /**
+     * Create renderer service
+     */
+    private function create_renderer_service() {
+        return new class {
+            public function render($atts, $content = '') {
+                // Try to use existing template
+                $template_file = QCC_PLUGIN_PATH . 'templates/calculator.php';
+                if (file_exists($template_file)) {
+                    ob_start();
+                    $attributes = $atts; // Make available to template
+                    include $template_file;
+                    return ob_get_clean();
+                }
+                
+                // Fallback to basic HTML
+                return $this->render_basic_html($atts);
+            }
+            
+            private function render_basic_html($atts) {
+                $defaults = array(
+                    'currency' => '€',
+                    'default_revenue' => 1000000,
+                    'default_quality_basis' => 3
+                );
+                $atts = wp_parse_args($atts, $defaults);
+                
+                ob_start();
+                ?>
+                <div class="qcc-calculator" style="border: 1px solid #ddd; padding: 20px; border-radius: 8px; max-width: 600px; margin: 20px 0; background: #fff;">
+                    <h3 style="margin-top: 0; color: #333;"><?php _e('Quality Cost Calculator', QCC_TEXT_DOMAIN); ?></h3>
+                    
+                    <form id="qcc-form" class="qcc-form">
+                        <?php wp_nonce_field('qcc_nonce', 'qcc_nonce'); ?>
+                        
+                        <div class="qcc-input-group" style="margin-bottom: 15px;">
+                            <label for="qcc_revenue" style="display: block; margin-bottom: 5px; font-weight: bold;"><?php _e('Annual Revenue', QCC_TEXT_DOMAIN); ?> (<?php echo esc_html($atts['currency']); ?>):</label>
+                            <input type="number" id="qcc_revenue" name="revenue" value="<?php echo esc_attr($atts['default_revenue']); ?>" min="0" step="1000" required style="width: 100%; max-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        
+                        <div class="qcc-input-group" style="margin-bottom: 15px;">
+                            <label for="qcc_quality_basis" style="display: block; margin-bottom: 5px; font-weight: bold;"><?php _e('Quality Cost Basis', QCC_TEXT_DOMAIN); ?> (% <?php _e('of Revenue', QCC_TEXT_DOMAIN); ?>):</label>
+                            <input type="number" id="qcc_quality_basis" name="quality_basis" value="<?php echo esc_attr($atts['default_quality_basis']); ?>" min="0" max="100" step="0.1" required style="width: 100%; max-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        
+                        <div class="qcc-input-group" style="margin-bottom: 15px;">
+                            <label for="qcc_prevention" style="display: block; margin-bottom: 5px; font-weight: bold;"><?php _e('Prevention', QCC_TEXT_DOMAIN); ?> (%):</label>
+                            <input type="number" id="qcc_prevention" name="prevention" value="40" min="0" max="100" step="0.1" required style="width: 100%; max-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        
+                        <div class="qcc-input-group" style="margin-bottom: 15px;">
+                            <label for="qcc_appraisal" style="display: block; margin-bottom: 5px; font-weight: bold;"><?php _e('Appraisal', QCC_TEXT_DOMAIN); ?> (%):</label>
+                            <input type="number" id="qcc_appraisal" name="appraisal" value="30" min="0" max="100" step="0.1" required style="width: 100%; max-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        
+                        <div class="qcc-input-group" style="margin-bottom: 15px;">
+                            <label for="qcc_internal" style="display: block; margin-bottom: 5px; font-weight: bold;"><?php _e('Internal Defects', QCC_TEXT_DOMAIN); ?> (%):</label>
+                            <input type="number" id="qcc_internal" name="internal_defect" value="20" min="0" max="100" step="0.1" required style="width: 100%; max-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        
+                        <div class="qcc-input-group" style="margin-bottom: 20px;">
+                            <label for="qcc_external" style="display: block; margin-bottom: 5px; font-weight: bold;"><?php _e('External Defects', QCC_TEXT_DOMAIN); ?> (%):</label>
+                            <input type="number" id="qcc_external" name="external_defect" value="10" min="0" max="100" step="0.1" required style="width: 100%; max-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        
+                        <div class="qcc-submit-group">
+                            <button type="submit" class="qcc-submit-btn" style="background: #0073aa; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;"><?php _e('Calculate', QCC_TEXT_DOMAIN); ?></button>
+                        </div>
+                    </form>
+                    
+                    <div id="qcc-results" class="qcc-results" style="display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #0073aa;">
+                        <h4 style="margin-top: 0; color: #0073aa;"><?php _e('Results', QCC_TEXT_DOMAIN); ?>:</h4>
+                        <div class="qcc-results-content"></div>
+                    </div>
+                </div>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    $('#qcc-form').on('submit', function(e) {
+                        e.preventDefault();
+                        
+                        var formData = {
+                            action: 'qcc_calculate',
+                            nonce: $('#qcc_nonce').val(),
+                            revenue: $('#qcc_revenue').val(),
+                            quality_basis: $('#qcc_quality_basis').val(),
+                            prevention: $('#qcc_prevention').val(),
+                            appraisal: $('#qcc_appraisal').val(),
+                            internal_defect: $('#qcc_internal').val(),
+                            external_defect: $('#qcc_external').val()
+                        };
+                        
+                        $.post('<?php echo admin_url('admin-ajax.php'); ?>', formData, function(response) {
+                            if (response.success) {
+                                var results = response.data;
+                                var html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">' +
+                                          '<div style="padding: 10px; background: white; border-radius: 4px;"><strong><?php _e("Total Quality Costs", QCC_TEXT_DOMAIN); ?>:</strong><br>' + 
+                                          '<span style="font-size: 18px; color: #0073aa;">' + results.total_quality_costs.toLocaleString() + ' <?php echo esc_js($atts['currency']); ?></span></div>' +
+                                          '<div style="padding: 10px; background: white; border-radius: 4px;"><strong><?php _e("COGQ (Cost of Good Quality)", QCC_TEXT_DOMAIN); ?>:</strong><br>' + 
+                                          '<span style="font-size: 18px; color: #28a745;">' + results.cogq.toLocaleString() + ' <?php echo esc_js($atts['currency']); ?></span></div>' +
+                                          '<div style="padding: 10px; background: white; border-radius: 4px;"><strong><?php _e("COPQ (Cost of Poor Quality)", QCC_TEXT_DOMAIN); ?>:</strong><br>' + 
+                                          '<span style="font-size: 18px; color: #dc3545;">' + results.copq.toLocaleString() + ' <?php echo esc_js($atts['currency']); ?></span></div>' +
+                                          '<div style="padding: 10px; background: white; border-radius: 4px;"><strong><?php _e("Prevention Costs", QCC_TEXT_DOMAIN); ?>:</strong><br>' + 
+                                          '<span style="font-size: 16px;">' + results.prevention_cost.toLocaleString() + ' <?php echo esc_js($atts['currency']); ?></span></div>' +
+                                          '</div>';
+                                
+                                $('#qcc-results .qcc-results-content').html(html);
+                                $('#qcc-results').show();
+                            } else {
+                                alert('<?php _e("Calculation failed. Please check your input.", QCC_TEXT_DOMAIN); ?>');
+                            }
+                        });
+                    });
+                });
+                </script>
+                <?php
+                return ob_get_clean();
+            }
+        };
+    }
+    
+    /**
+     * Should load frontend assets
+     */
+    private function should_load_frontend_assets() {
         global $post;
         
-        if (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'quality_cost_calculator')) {
-            echo '<meta name="qcc-version" content="' . esc_attr(QCC_PLUGIN_VERSION) . '">' . "\n";
-            
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                echo '<script>console.log("QCC Debug Mode - Version ' . QCC_PLUGIN_VERSION . '");</script>' . "\n";
-            }
-        }
-    }
-    
-    /**
-     * Enqueue admin assets
-     */
-    public function enqueue_admin_assets($hook) {
-        if (strpos($hook, 'quality-cost-calculator') !== false) {
-            wp_enqueue_style(
-                'qcc-admin',
-                QCC_PLUGIN_URL . 'assets/admin.css',
-                array(),
-                QCC_PLUGIN_VERSION
-            );
-            
-            wp_enqueue_script(
-                'qcc-admin',
-                QCC_PLUGIN_URL . 'assets/admin.js',
-                array('jquery'),
-                QCC_PLUGIN_VERSION,
-                true
-            );
-        }
-    }
-    
-    /**
-     * Register admin pages
-     */
-    public function register_admin_pages() {
-        $admin_controller = $this->get_service('admin_controller');
-        
-        if ($admin_controller && method_exists($admin_controller, 'register_pages')) {
-            $admin_controller->register_pages();
-        } else {
-            // Fallback admin page registration
-            add_options_page(
-                __('Quality Cost Calculator', 'quality-cost-calculator'),
-                __('QCC Settings', 'quality-cost-calculator'),
-                'manage_options',
-                'quality-cost-calculator',
-                array($this, 'render_admin_page')
-            );
-        }
-    }
-    
-    /**
-     * Render fallback admin page
-     */
-    public function render_admin_page() {
-        echo '<div class="wrap">';
-        echo '<h1>' . __('Quality Cost Calculator Settings', 'quality-cost-calculator') . '</h1>';
-        echo '<p>' . __('Admin interface is loading...', 'quality-cost-calculator') . '</p>';
-        echo '</div>';
-    }
-    
-    /**
-     * Register plugin settings
-     */
-    public function register_settings() {
-        register_setting('qcc_settings', 'qcc_feature_flags');
-        register_setting('qcc_settings', 'qcc_default_language');
-        register_setting('qcc_settings', 'qcc_default_currency');
-        register_setting('qcc_settings', 'qcc_default_unit');
-    }
-    
-    /**
-     * Handle AJAX calculation requests
-     */
-    public function handle_ajax_calculation() {
-        // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'qcc_nonce')) {
-            wp_die(__('Security check failed', 'quality-cost-calculator'));
+        if (is_a($post, 'WP_Post')) {
+            return has_shortcode($post->post_content, 'quality_cost_calculator') ||
+                   has_shortcode($post->post_content, 'qcc_calculator') ||
+                   has_shortcode($post->post_content, 'cost_quality_calculator');
         }
         
-        $calculation_engine = $this->get_service('calculation_engine');
+        return false;
+    }
+    
+    /**
+     * Emergency fallback
+     */
+    private function emergency_fallback() {
+        add_shortcode('quality_cost_calculator', function($atts) {
+            return '<div class="qcc-emergency" style="padding: 20px; border: 1px solid #ff6b6b; background: #ffe6e6; color: #d63031; border-radius: 5px;">
+                <strong>Quality Cost Calculator:</strong> Bootstrap initialization failed.
+                <br><small>Running in emergency mode. Some features may be limited.</small>
+            </div>';
+        });
         
-        if ($calculation_engine && method_exists($calculation_engine, 'calculate')) {
-            $result = $calculation_engine->calculate($_POST);
-        } else {
-            // Fallback calculation
-            $result = $this->fallback_calculation($_POST);
-        }
-        
-        wp_send_json_success($result);
+        return false;
     }
     
     /**
-     * Fallback calculation method
+     * Render error message
      */
-    private function fallback_calculation($data) {
-        // Simple fallback calculation
-        $revenue = floatval($data['revenue'] ?? 0);
-        $quality_percentage = floatval($data['quality_percentage'] ?? 0);
-        
-        return array(
-            'total_cost' => $revenue * ($quality_percentage / 100),
-            'cogq' => 0,
-            'copq' => 0,
-            'message' => __('Using fallback calculation', 'quality-cost-calculator')
-        );
+    private function render_error_message($message) {
+        return '<div class="qcc-error" style="padding: 15px; border: 1px solid #ff6b6b; background: #ffe6e6; color: #d63031; border-radius: 4px;">
+            <strong>Error:</strong> ' . esc_html($message) . '
+        </div>';
     }
     
     /**
-     * Get service from container
+     * Render basic calculator (used as fallback)
      */
-    public function get_service($service_name) {
-        if ($this->container && method_exists($this->container, 'get')) {
-            try {
-                return $this->container->get($service_name);
-            } catch (Exception $e) {
-                error_log('QCC: Failed to get service ' . $service_name . ' - ' . $e->getMessage());
-                return null;
-            }
-        }
-        
-        return null;
+    private function render_basic_calculator($atts) {
+        $renderer = $this->create_renderer_service();
+        return $renderer->render($atts);
     }
     
     /**
-     * Get feature flag value
-     */
-    public function get_feature_flag($flag_name) {
-        return $this->feature_flags[$flag_name] ?? false;
-    }
-    
-    /**
-     * Set feature flag value
-     */
-    public function set_feature_flag($flag_name, $value) {
-        $this->feature_flags[$flag_name] = $value;
-        update_option('qcc_feature_flags', $this->feature_flags);
-    }
-    
-    /**
-     * Get public feature flags (safe for frontend)
-     */
-    private function get_public_feature_flags() {
-        return array(
-            'use_modular_rendering' => $this->get_feature_flag('use_modular_rendering'),
-            'enable_advanced_caching' => $this->get_feature_flag('enable_advanced_caching')
-        );
-    }
-    
-    /**
-     * Plugin activation handler
+     * Plugin activation
      */
     public static function activate() {
-        try {
-            // Run activation procedures
-            self::run_activation_procedures();
-            
-            // Set activation flag and timestamp
-            update_option('qcc_activated', true);
-            update_option('qcc_activation_time', current_time('timestamp'));
-            update_option('qcc_version', QCC_PLUGIN_VERSION);
-            
-            // Create necessary database tables if needed
-            self::create_database_tables();
-            
-            // Set default options
-            self::set_default_options();
-            
-            // Flush rewrite rules
-            flush_rewrite_rules();
-            
-        } catch (Exception $e) {
-            error_log('QCC: Activation failed - ' . $e->getMessage());
-            throw $e;
+        // Set default options
+        add_option('qcc_version', QCC_PLUGIN_VERSION);
+        add_option('qcc_activated', true);
+        
+        // Flush rewrite rules
+        flush_rewrite_rules();
+        
+        if (QCC_DEBUG) {
+            error_log('QCC Bootstrap: Plugin activated with new architecture');
         }
     }
     
     /**
-     * Plugin deactivation handler
+     * Plugin deactivation
      */
     public static function deactivate() {
-        try {
-            // Clean up temporary data
-            delete_transient('qcc_system_check');
-            delete_transient('qcc_performance_data');
-            
-            // Stop performance monitoring
-            if (class_exists('QCC_Performance_Monitor')) {
-                QCC_Performance_Monitor::stop_tracking();
-            }
-            
-            // Flush rewrite rules
-            flush_rewrite_rules();
-            
-        } catch (Exception $e) {
-            error_log('QCC: Deactivation failed - ' . $e->getMessage());
+        // Clean up temporary data
+        delete_transient('qcc_system_check');
+        
+        // Flush rewrite rules
+        flush_rewrite_rules();
+        
+        if (QCC_DEBUG) {
+            error_log('QCC Bootstrap: Plugin deactivated');
         }
     }
     
     /**
-     * Plugin uninstall handler
+     * Plugin uninstall
      */
     public static function uninstall() {
-        try {
-            // Remove all plugin options
-            $options_to_remove = array(
-                'qcc_activated',
-                'qcc_activation_time',
-                'qcc_version',
-                'qcc_feature_flags',
-                'qcc_default_language',
-                'qcc_default_currency',
-                'qcc_default_unit',
-                'qcc_settings'
-            );
-            
-            foreach ($options_to_remove as $option) {
-                delete_option($option);
-            }
-            
-            // Remove all transients
-            global $wpdb;
-            $wpdb->query(
-                "DELETE FROM {$wpdb->options} 
-                WHERE option_name LIKE '_transient_qcc_%' 
-                OR option_name LIKE '_transient_timeout_qcc_%'"
-            );
-            
-            // Remove uploaded files
-            self::cleanup_uploaded_files();
-            
-            // Drop custom tables if they exist
-            self::drop_database_tables();
-            
-        } catch (Exception $e) {
-            error_log('QCC: Uninstall failed - ' . $e->getMessage());
+        // Remove all options
+        delete_option('qcc_version');
+        delete_option('qcc_activated');
+        delete_option('qcc_settings');
+        
+        // Remove cache
+        wp_cache_delete('qcc_config');
+        
+        if (QCC_DEBUG) {
+            error_log('QCC Bootstrap: Plugin uninstalled');
         }
-    }
-    
-    /**
-     * Run activation procedures
-     */
-    private static function run_activation_procedures() {
-        // Check system requirements
-        if (version_compare(PHP_VERSION, '7.4', '<')) {
-            throw new Exception('PHP 7.4 or higher required');
-        }
-        
-        if (version_compare(get_bloginfo('version'), '5.0', '<')) {
-            throw new Exception('WordPress 5.0 or higher required');
-        }
-        
-        // Check required directories are writable
-        $upload_dir = wp_upload_dir();
-        if (!wp_is_writable($upload_dir['basedir'])) {
-            throw new Exception('Upload directory is not writable');
-        }
-    }
-    
-    /**
-     * Create database tables if needed
-     */
-    private static function create_database_tables() {
-        global $wpdb;
-        
-        $charset_collate = $wpdb->get_charset_collate();
-        
-        // Example: Create calculations history table
-        $table_name = $wpdb->prefix . 'qcc_calculations';
-        
-        $sql = "CREATE TABLE $table_name (
-            id mediumint(9) NOT NULL AUTO_INCREMENT,
-            user_id bigint(20) DEFAULT 0,
-            calculation_data longtext NOT NULL,
-            created_at datetime DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY user_id (user_id),
-            KEY created_at (created_at)
-        ) $charset_collate;";
-        
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
-        
-        // Update database version
-        update_option('qcc_db_version', '1.0');
-    }
-    
-    /**
-     * Set default plugin options
-     */
-    private static function set_default_options() {
-        $defaults = array(
-            'qcc_default_language' => 'en',
-            'qcc_default_currency' => 'EUR',
-            'qcc_default_unit' => '1000000',
-            'qcc_feature_flags' => array(
-                'use_new_shortcode_architecture' => false,
-                'use_service_container' => true,
-                'enable_performance_monitoring' => false,
-                'use_modular_rendering' => false,
-                'enable_advanced_caching' => true,
-                'use_new_calculation_engine' => false
-            )
-        );
-        
-        foreach ($defaults as $option => $value) {
-            if (get_option($option) === false) {
-                update_option($option, $value);
-            }
-        }
-    }
-    
-    /**
-     * Cleanup uploaded files
-     */
-    private static function cleanup_uploaded_files() {
-        $upload_dir = wp_upload_dir();
-        $directories_to_remove = array(
-            $upload_dir['basedir'] . '/qcc-cache',
-            $upload_dir['basedir'] . '/qcc-exports',
-            $upload_dir['basedir'] . '/qcc-temp'
-        );
-        
-        foreach ($directories_to_remove as $dir) {
-            if (is_dir($dir)) {
-                self::remove_directory_recursive($dir);
-            }
-        }
-    }
-    
-    /**
-     * Drop database tables
-     */
-    private static function drop_database_tables() {
-        global $wpdb;
-        
-        $tables_to_drop = array(
-            $wpdb->prefix . 'qcc_calculations'
-        );
-        
-        foreach ($tables_to_drop as $table) {
-            $wpdb->query("DROP TABLE IF EXISTS $table");
-        }
-    }
-    
-    /**
-     * Remove directory recursively
-     */
-    private static function remove_directory_recursive($dir) {
-        if (!is_dir($dir)) {
-            return false;
-        }
-        
-        $files = array_diff(scandir($dir), array('.', '..'));
-        
-        foreach ($files as $file) {
-            $path = $dir . DIRECTORY_SEPARATOR . $file;
-            is_dir($path) ? self::remove_directory_recursive($path) : unlink($path);
-        }
-        
-        return rmdir($dir);
-    }
-    
-    /**
-     * Get plugin status for debugging
-     */
-    public function get_status() {
-        return array(
-            'version' => QCC_PLUGIN_VERSION,
-            'initialized' => $this->initialized,
-            'feature_flags' => $this->feature_flags,
-            'services_loaded' => $this->container ? count($this->container->get_registered_services()) : 0,
-            'memory_usage' => memory_get_usage(true),
-            'php_version' => PHP_VERSION,
-            'wp_version' => get_bloginfo('version')
-        );
-    }
-    
-    /**
-     * Is plugin properly initialized?
-     */
-    public function is_initialized() {
-        return $this->initialized;
     }
     
     /**
@@ -868,5 +539,12 @@ class QCC_Bootstrap {
      */
     public function get_container() {
         return $this->container;
+    }
+    
+    /**
+     * Check if initialized
+     */
+    public function is_initialized() {
+        return $this->initialized;
     }
 }

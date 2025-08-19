@@ -145,19 +145,23 @@ register_activation_hook(__FILE__, function() {
     }
 });
 
-// Plugin deactivation  
+// Plugin deactivation
 register_deactivation_hook(__FILE__, function() {
     if (class_exists('QCC_Bootstrap')) {
         QCC_Bootstrap::deactivate();
     }
 });
 
-// Plugin uninstall
-register_uninstall_hook(__FILE__, function() {
+// Plugin uninstall handler required by WordPress since the callback is
+// serialized when registered. Anonymous functions (closures) cannot be
+// serialized and would cause a fatal error. Using a named function ensures
+// proper cleanup during plugin uninstallation.
+function qcc_plugin_uninstall() {
     if (class_exists('QCC_Bootstrap')) {
         QCC_Bootstrap::uninstall();
     }
-});
+}
+register_uninstall_hook(__FILE__, 'qcc_plugin_uninstall');
 
 // Initialize plugin on plugins_loaded
 add_action('plugins_loaded', 'qcc_init_plugin', 10);

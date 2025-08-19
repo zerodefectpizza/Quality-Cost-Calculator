@@ -1,6 +1,8 @@
 <?php
 /**
- * Plugin autoloader for Quality Cost Calculator - ERWEITERT FÜR NEUE ARCHITEKTUR
+ * QCC Autoloader - Erweitert für neue Architektur
+ *
+ * ERSETZEN: wp-content/plugins/quality-cost-calculator/includes/qcc-autoloader.php
  *
  * @package QualityCostCalculator
  * @since 2.0.0
@@ -12,16 +14,30 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * QCC Autoloader Class - Erweitert für modulare Architektur
+ * QCC Autoloader Class - Neue Architektur
  */
 class QCC_Autoloader {
     
     /**
-     * Class map for autoloading - VOLLSTÄNDIG ERWEITERT
+     * Autoloader registered flag
+     * @var bool
+     */
+    private static $registered = false;
+    
+    /**
+     * Class map for autoloading
      */
     private static $class_map = array(
         // =============================================================================
-        // LEGACY CLASSES (bestehend)
+        // NEUE CORE ARCHITECTURE (Priorität)
+        // =============================================================================
+        'QCC_Bootstrap' => 'core/class-qcc-bootstrap.php',
+        'QCC_Service_Container' => 'core/class-qcc-service-container.php',
+        'QCC_Configuration' => 'core/class-qcc-configuration.php',
+        'QCC_Plugin' => 'core/class-qcc-plugin.php',
+        
+        // =============================================================================
+        // BESTEHENDE LEGACY CLASSES (funktionsfähig)
         // =============================================================================
         'QCC_Core' => 'class-qcc-core.php',
         'QCC_Admin' => 'class-qcc-admin.php', 
@@ -33,304 +49,223 @@ class QCC_Autoloader {
         'QCC_Validator' => 'class-qcc-validator.php',
         
         // =============================================================================
-        // NEUE CORE ARCHITECTURE (Phase 1)
+        // BUSINESS LOGIC (behalten)
         // =============================================================================
-        'QCC_Bootstrap' => 'core/class-qcc-bootstrap.php',
-        'QCC_Service_Container' => 'core/class-qcc-service-container.php',
-        'QCC_Configuration' => 'core/class-qcc-configuration.php',
-        'QCC_Plugin' => 'core/class-qcc-plugin.php',
+        'QCC_Calculation_Engine' => 'business/calculations/class-qcc-calculation-engine.php',
+        'QCC_COPQ_Calculator' => 'business/calculations/class-qcc-copq-calculator.php',
         
         // =============================================================================
-        // LEGACY FALLBACK SYSTEM 
+        // LEGACY FALLBACK SYSTEM
         // =============================================================================
         'QCC_Legacy_Bootstrap' => 'legacy/class-qcc-legacy-bootstrap.php',
         'QCC_Shortcode_Legacy' => 'legacy/class-qcc-shortcode-legacy.php',
         'QCC_Legacy_Calculator' => 'legacy/class-qcc-legacy-calculator.php',
         
         // =============================================================================
-        // PRESENTATION LAYER (Phase 2)
+        // PRESENTATION LAYER
         // =============================================================================
         'QCC_Shortcode_Controller' => 'presentation/class-qcc-shortcode-controller.php',
         'QCC_Template_Router' => 'presentation/class-qcc-template-router.php',
         'QCC_Response_Builder' => 'presentation/class-qcc-response-builder.php',
-        'QCC_Error_Handler' => 'presentation/class-qcc-error-handler.php',
         
         // =============================================================================
-        // RENDERING LAYER (Phase 3)
-        // =============================================================================
-        
-        // Orchestration
-        'QCC_HTML_Orchestrator' => 'rendering/orchestration/class-qcc-html-orchestrator.php',
-        'QCC_HTML_Renderer' => 'rendering/orchestration/class-qcc-html-renderer.php',
-        
-        // Builders
-        'QCC_Form_Builder' => 'rendering/builders/class-qcc-form-builder.php',
-        'QCC_Display_Builder' => 'rendering/builders/class-qcc-display-builder.php',
-        'QCC_Control_Builder' => 'rendering/builders/class-qcc-control-builder.php',
-        'QCC_Layout_Builder' => 'rendering/builders/class-qcc-layout-builder.php',
-        'QCC_Section_Builder' => 'rendering/builders/class-qcc-section-builder.php',
-        'QCC_UI_Builder' => 'rendering/builders/class-qcc-ui-builder.php',
-        'QCC_Result_Builder' => 'rendering/builders/class-qcc-result-builder.php',
-        
-        // Atomic Components
-        'QCC_Input_Factory' => 'rendering/atoms/class-qcc-input-factory.php',
-        'QCC_Display_Factory' => 'rendering/atoms/class-qcc-display-factory.php',
-        'QCC_Layout_Factory' => 'rendering/atoms/class-qcc-layout-factory.php',
-        'QCC_Interaction_Factory' => 'rendering/atoms/class-qcc-interaction-factory.php',
-        
-        // Input Atoms
-        'QCC_Percentage_Input' => 'rendering/atoms/inputs/class-qcc-percentage-input.php',
-        'QCC_Currency_Input' => 'rendering/atoms/inputs/class-qcc-currency-input.php',
-        'QCC_Select_Input' => 'rendering/atoms/inputs/class-qcc-select-input.php',
-        'QCC_Number_Input' => 'rendering/atoms/inputs/class-qcc-number-input.php',
-        
-        // Display Atoms  
-        'QCC_Result_Card' => 'rendering/atoms/displays/class-qcc-result-card.php',
-        'QCC_Chart_Container' => 'rendering/atoms/displays/class-qcc-chart-container.php',
-        'QCC_Status_Display' => 'rendering/atoms/displays/class-qcc-status-display.php',
-        'QCC_Progress_Bar' => 'rendering/atoms/displays/class-qcc-progress-bar.php',
-        
-        // =============================================================================
-        // BUSINESS LOGIC LAYER (Phase 4)
-        // =============================================================================
-        
-        // Calculations
-        'QCC_Calculation_Engine' => 'business/calculations/class-qcc-calculation-engine.php',
-        'QCC_COGQ_Calculator' => 'business/calculations/class-qcc-cogq-calculator.php',
-        'QCC_COPQ_Calculator' => 'business/calculations/class-qcc-copq-calculator.php',
-        'QCC_Opportunity_Calculator' => 'business/calculations/class-qcc-opportunity-calculator.php',
-        'QCC_ROI_Calculator' => 'business/calculations/class-qcc-roi-calculator.php',
-        'QCC_Cost_Calculator' => 'business/calculations/class-qcc-cost-calculator.php',
-        'QCC_Percentage_Calculator' => 'business/calculations/class-qcc-percentage-calculator.php',
-        
-        // Validation
-        'QCC_Validation_Engine' => 'business/validation/class-qcc-validation-engine.php',
-        'QCC_Input_Validator' => 'business/validation/class-qcc-input-validator.php',
-        'QCC_Business_Validator' => 'business/validation/class-qcc-business-validator.php',
-        'QCC_Integrity_Validator' => 'business/validation/class-qcc-integrity-validator.php',
-        'QCC_Percentage_Validator' => 'business/validation/class-qcc-percentage-validator.php',
-        'QCC_Currency_Validator' => 'business/validation/class-qcc-currency-validator.php',
-        
-        // =============================================================================
-        // TRANSLATION LAYER (Phase 5)
-        // =============================================================================
-        'QCC_Translation_Service' => 'translation/class-qcc-translation-service.php',
-        'QCC_Language_Detector' => 'translation/class-qcc-language-detector.php',
-        'QCC_Translation_Cache' => 'translation/class-qcc-translation-cache.php',
-        'QCC_Fallback_Handler' => 'translation/class-qcc-fallback-handler.php',
-        'QCC_Translator' => 'translation/class-qcc-translator.php',
-        
-        // Language Specific Classes
-        'QCC_English_Translations' => 'translation/languages/class-qcc-english-translations.php',
-        'QCC_German_Translations' => 'translation/languages/class-qcc-german-translations.php',
-        'QCC_French_Translations' => 'translation/languages/class-qcc-french-translations.php',
-        'QCC_Spanish_Translations' => 'translation/languages/class-qcc-spanish-translations.php',
-        'QCC_Chinese_Translations' => 'translation/languages/class-qcc-chinese-translations.php',
-        
-        // =============================================================================
-        // ASSET MANAGEMENT (Phase 6)
-        // =============================================================================
-        'QCC_Asset_Manager' => 'assets/class-qcc-asset-manager.php',
-        'QCC_JavaScript_Generator' => 'assets/class-qcc-javascript-generator.php',
-        'QCC_CSS_Generator' => 'assets/class-qcc-css-generator.php',
-        'QCC_Dependency_Manager' => 'assets/class-qcc-dependency-manager.php',
-        'QCC_Theme_Manager' => 'assets/class-qcc-theme-manager.php',
-        
-        // =============================================================================
-        // SERVICES LAYER
+        // SERVICES LAYER (bei Bedarf)
         // =============================================================================
         'QCC_Cache_Service' => 'services/class-qcc-cache-service.php',
         'QCC_Export_Service' => 'services/class-qcc-export-service.php',
         'QCC_Import_Service' => 'services/class-qcc-import-service.php',
-        'QCC_Template_Service' => 'services/class-qcc-template-service.php',
         'QCC_Settings_Service' => 'services/class-qcc-settings-service.php',
         
         // =============================================================================
-        // INFRASTRUCTURE LAYER
+        // ASSET MANAGEMENT
         // =============================================================================
-        'QCC_Service_Registry' => 'infrastructure/class-qcc-service-registry.php',
-        'QCC_Lazy_Loader' => 'infrastructure/class-qcc-lazy-loader.php',
-        'QCC_Instance_Cache' => 'infrastructure/class-qcc-instance-cache.php',
-        'QCC_Feature_Flags' => 'infrastructure/class-qcc-feature-flags.php',
-        'QCC_Event_Manager' => 'infrastructure/class-qcc-event-manager.php',
+        'QCC_Asset_Manager' => 'assets/class-qcc-asset-manager.php',
+        'QCC_JavaScript_Generator' => 'assets/class-qcc-javascript-generator.php',
+        'QCC_CSS_Generator' => 'assets/class-qcc-css-generator.php',
         
         // =============================================================================
-        // MONITORING & DEBUG
+        // INTERFACES
         // =============================================================================
-        'QCC_Performance_Monitor' => 'monitoring/class-qcc-performance-monitor.php',
-        'QCC_Error_Tracker' => 'monitoring/class-qcc-error-tracker.php',
-        'QCC_Debug_Logger' => 'monitoring/class-qcc-debug-logger.php',
-        'QCC_Memory_Monitor' => 'monitoring/class-qcc-memory-monitor.php',
-        'QCC_System_Monitor' => 'monitoring/class-qcc-system-monitor.php',
-        
-        // =============================================================================
-        // ADMIN INTERFACE
-        // =============================================================================
-        'QCC_Admin_Controller' => 'admin/class-qcc-admin-controller.php',
-        'QCC_Admin_Page' => 'admin/class-qcc-admin-page.php',
-        'QCC_Settings_Page' => 'admin/class-qcc-settings-page.php',
-        'QCC_Status_Page' => 'admin/class-qcc-status-page.php',
-        'QCC_Debug_Page' => 'admin/class-qcc-debug-page.php',
-        
-        // =============================================================================
-        // INTERFACES (Design Contracts)
-        // =============================================================================
-        'QCC_Renderable_Interface' => 'interfaces/interface-qcc-renderable.php',
-        'QCC_Configurable_Interface' => 'interfaces/interface-qcc-configurable.php',
-        'QCC_Translatable_Interface' => 'interfaces/interface-qcc-translatable.php',
-        'QCC_Calculable_Interface' => 'interfaces/interface-qcc-calculable.php',
-        'QCC_Validatable_Interface' => 'interfaces/interface-qcc-validatable.php',
-        'QCC_Cacheable_Interface' => 'interfaces/interface-qcc-cacheable.php'
+        'QCC_Renderable' => 'interfaces/interface-qcc-renderable.php',
+        'QCC_Calculable' => 'interfaces/interface-qcc-calculable.php',
+        'QCC_Cacheable' => 'interfaces/interface-qcc-cacheable.php',
     );
     
     /**
-     * Service aliases for easier access
+     * Loaded classes tracking
      */
-    private static $aliases = array(
-        'container' => 'QCC_Service_Container',
-        'config' => 'QCC_Configuration',
-        'translator' => 'QCC_Translation_Service',
-        'calculator' => 'QCC_Calculation_Engine',
-        'validator' => 'QCC_Validation_Engine',
-        'renderer' => 'QCC_HTML_Orchestrator',
-        'monitor' => 'QCC_Performance_Monitor'
-    );
+    private static $loaded_classes = array();
     
     /**
-     * Registered autoloader flag
+     * Failed loads tracking
      */
-    private static $registered = false;
+    private static $failed_loads = array();
     
     /**
-     * Initialize and register autoloader
+     * Initialize autoloader
      */
-    public static function register() {
+    public static function init() {
         if (self::$registered) {
-            return;
+            return true;
         }
         
+        if (!function_exists('spl_autoload_register')) {
+            if (QCC_DEBUG) {
+                error_log('QCC: spl_autoload_register not available');
+            }
+            return false;
+        }
+        
+        // Register autoloader
         spl_autoload_register(array(__CLASS__, 'autoload'));
         self::$registered = true;
         
-        // Log autoloader initialization
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log('QCC: Autoloader registered with ' . count(self::$class_map) . ' classes');
+        if (QCC_DEBUG) {
+            error_log('QCC: Autoloader initialized with ' . count(self::$class_map) . ' classes');
         }
-    }
-    
-    /**
-     * Unregister autoloader
-     */
-    public static function unregister() {
-        if (self::$registered) {
-            spl_autoload_unregister(array(__CLASS__, 'autoload'));
-            self::$registered = false;
-        }
+        
+        return true;
     }
     
     /**
      * Autoload classes
      */
     public static function autoload($class_name) {
-        // Check if class is in our namespace
+        // Only load QCC classes
         if (strpos($class_name, 'QCC_') !== 0) {
-            return;
+            return false;
         }
         
-        // Check for alias
-        if (isset(self::$aliases[$class_name])) {
-            $class_name = self::$aliases[$class_name];
+        // Check if already loaded
+        if (in_array($class_name, self::$loaded_classes)) {
+            return true;
         }
         
-        // Check if we have a mapping for this class
+        // Check if in class map
         if (!isset(self::$class_map[$class_name])) {
-            if (defined('QCC_DEBUG') && QCC_DEBUG) {
-                error_log("QCC: No autoload mapping found for class: {$class_name}");
+            self::$failed_loads[] = array(
+                'class' => $class_name,
+                'reason' => 'not_in_map',
+                'time' => time()
+            );
+            
+            if (QCC_DEBUG) {
+                error_log("QCC: Class {$class_name} not found in autoloader map");
             }
-            return;
+            
+            return false;
         }
         
         // Build file path
-        $file = QCC_PLUGIN_PATH . 'includes/' . self::$class_map[$class_name];
+        $relative_path = self::$class_map[$class_name];
+        $file_path = QCC_PLUGIN_PATH . 'includes/' . $relative_path;
         
-        // Load file if it exists
-        if (file_exists($file)) {
-            require_once $file;
+        // Check if file exists
+        if (!file_exists($file_path)) {
+            self::$failed_loads[] = array(
+                'class' => $class_name,
+                'file' => $file_path,
+                'reason' => 'file_not_found',
+                'time' => time()
+            );
+            
+            if (QCC_DEBUG) {
+                error_log("QCC: Failed to load {$class_name} - file not found: {$file_path}");
+            }
+            
+            return false;
+        }
+        
+        // Load the file
+        try {
+            require_once $file_path;
             
             // Verify class was loaded
-            if (class_exists($class_name)) {
-                if (defined('QCC_DEBUG') && QCC_DEBUG) {
-                    error_log("QCC: Successfully autoloaded class {$class_name} from {$file}");
+            if (class_exists($class_name) || interface_exists($class_name)) {
+                self::$loaded_classes[] = $class_name;
+                
+                if (QCC_DEBUG) {
+                    error_log("QCC: Successfully loaded {$class_name}");
                 }
+                
+                return true;
             } else {
-                if (defined('QCC_DEBUG') && QCC_DEBUG) {
-                    error_log("QCC: File loaded but class {$class_name} not found in {$file}");
+                self::$failed_loads[] = array(
+                    'class' => $class_name,
+                    'file' => $file_path,
+                    'reason' => 'class_not_defined_after_include',
+                    'time' => time()
+                );
+                
+                if (QCC_DEBUG) {
+                    error_log("QCC: File loaded but class {$class_name} not defined");
                 }
+                
+                return false;
             }
-        } else {
-            if (defined('QCC_DEBUG') && QCC_DEBUG) {
-                error_log("QCC: Failed to autoload class {$class_name} - file not found: {$file}");
+            
+        } catch (Exception $e) {
+            self::$failed_loads[] = array(
+                'class' => $class_name,
+                'file' => $file_path,
+                'reason' => 'exception: ' . $e->getMessage(),
+                'time' => time()
+            );
+            
+            if (QCC_DEBUG) {
+                error_log("QCC: Exception loading {$class_name}: " . $e->getMessage());
             }
+            
+            return false;
         }
     }
     
     /**
-     * Load class manually (for explicit loading)
+     * Load core classes for bootstrap
      */
-    public static function load_class($class_name) {
-        if (!class_exists($class_name)) {
-            self::autoload($class_name);
+    public static function load_core_classes() {
+        $core_classes = array(
+            'QCC_Bootstrap',
+            'QCC_Service_Container'
+        );
+        
+        $loaded = 0;
+        foreach ($core_classes as $class) {
+            if (self::autoload($class)) {
+                $loaded++;
+            }
         }
-        return class_exists($class_name);
+        
+        if (QCC_DEBUG) {
+            error_log("QCC: Core classes loading: {$loaded}/" . count($core_classes) . " loaded");
+        }
+        
+        return $loaded === count($core_classes);
     }
     
     /**
-     * Get all mapped classes
+     * Get loaded classes
+     */
+    public static function get_loaded_classes() {
+        return self::$loaded_classes;
+    }
+    
+    /**
+     * Get failed loads
+     */
+    public static function get_failed_loads() {
+        return self::$failed_loads;
+    }
+    
+    /**
+     * Get class map
      */
     public static function get_class_map() {
         return self::$class_map;
     }
     
     /**
-     * Get aliases
-     */
-    public static function get_aliases() {
-        return self::$aliases;
-    }
-    
-    /**
-     * Add class to map dynamically
-     */
-    public static function add_class($class_name, $file_name) {
-        self::$class_map[$class_name] = $file_name;
-        
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log("QCC: Added class mapping: {$class_name} => {$file_name}");
-        }
-    }
-    
-    /**
-     * Add alias
-     */
-    public static function add_alias($alias, $class_name) {
-        self::$aliases[$alias] = $class_name;
-    }
-    
-    /**
-     * Remove class from map
-     */
-    public static function remove_class($class_name) {
-        if (isset(self::$class_map[$class_name])) {
-            unset(self::$class_map[$class_name]);
-            
-            if (defined('QCC_DEBUG') && QCC_DEBUG) {
-                error_log("QCC: Removed class mapping: {$class_name}");
-            }
-        }
-    }
-    
-    /**
-     * Check if all mapped classes exist
+     * Validate class map (check if files exist)
      */
     public static function validate_class_map() {
         $missing_files = array();
@@ -353,299 +288,32 @@ class QCC_Autoloader {
             }
         }
         
-        // Log results
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log("QCC: Class map validation: " . count($found_files) . " found, " . count($missing_files) . " missing");
-            
-            if (!empty($missing_files)) {
-                foreach ($missing_files as $missing) {
-                    error_log("QCC: Missing class file: {$missing['class']} => {$missing['file']}");
-                }
-            }
-        }
-        
-        return $missing_files;
-    }
-    
-    /**
-     * Load core classes (minimal set for bootstrap)
-     */
-    public static function load_core_classes() {
-        $core_classes = array(
-            'QCC_Bootstrap',
-            'QCC_Service_Container', 
-            'QCC_Configuration'
+        return array(
+            'missing' => $missing_files,
+            'found' => $found_files,
+            'stats' => array(
+                'total' => count(self::$class_map),
+                'found' => count($found_files),
+                'missing' => count($missing_files),
+                'percentage' => count(self::$class_map) > 0 ? round((count($found_files) / count(self::$class_map)) * 100, 2) : 0
+            )
         );
-        
-        $loaded = 0;
-        foreach ($core_classes as $class) {
-            if (self::load_class($class)) {
-                $loaded++;
-            }
-        }
-        
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log("QCC: Core classes loading: {$loaded}/" . count($core_classes) . " loaded");
-        }
-        
-        return $loaded === count($core_classes);
-    }
-    
-    /**
-     * Load legacy classes (fallback system)
-     */
-    public static function load_legacy_classes() {
-        $legacy_classes = array(
-            'QCC_Legacy_Bootstrap',
-            'QCC_Shortcode_Legacy'
-        );
-        
-        $loaded = 0;
-        foreach ($legacy_classes as $class) {
-            if (self::load_class($class)) {
-                $loaded++;
-            }
-        }
-        
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log("QCC: Legacy classes loading: {$loaded}/" . count($legacy_classes) . " loaded");
-        }
-        
-        return $loaded === count($legacy_classes);
-    }
-    
-    /**
-     * Load admin classes (only in admin)
-     */
-    public static function load_admin_classes() {
-        if (!is_admin()) {
-            return false;
-        }
-        
-        $admin_classes = array(
-            'QCC_Admin_Controller',
-            'QCC_Admin_Page',
-            'QCC_Settings_Page'
-        );
-        
-        $loaded = 0;
-        foreach ($admin_classes as $class) {
-            if (self::load_class($class)) {
-                $loaded++;
-            }
-        }
-        
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log("QCC: Admin classes loading: {$loaded}/" . count($admin_classes) . " loaded");
-        }
-        
-        return $loaded === count($admin_classes);
-    }
-    
-    /**
-     * Load frontend classes (only in frontend)
-     */
-    public static function load_frontend_classes() {
-        if (is_admin() && !wp_doing_ajax()) {
-            return false;
-        }
-        
-        $frontend_classes = array(
-            'QCC_Shortcode_Controller',
-            'QCC_HTML_Orchestrator',
-            'QCC_Translation_Service'
-        );
-        
-        $loaded = 0;
-        foreach ($frontend_classes as $class) {
-            if (self::load_class($class)) {
-                $loaded++;
-            }
-        }
-        
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log("QCC: Frontend classes loading: {$loaded}/" . count($frontend_classes) . " loaded");
-        }
-        
-        return $loaded === count($frontend_classes);
-    }
-    
-    /**
-     * Load classes by category/layer
-     */
-    public static function load_layer_classes($layer) {
-        $layer_classes = array();
-        
-        switch ($layer) {
-            case 'rendering':
-                $layer_classes = array(
-                    'QCC_HTML_Orchestrator',
-                    'QCC_Form_Builder',
-                    'QCC_Display_Builder',
-                    'QCC_Input_Factory',
-                    'QCC_Display_Factory'
-                );
-                break;
-                
-            case 'business':
-                $layer_classes = array(
-                    'QCC_Calculation_Engine',
-                    'QCC_COGQ_Calculator',
-                    'QCC_COPQ_Calculator',
-                    'QCC_Validation_Engine'
-                );
-                break;
-                
-            case 'translation':
-                $layer_classes = array(
-                    'QCC_Translation_Service',
-                    'QCC_Language_Detector',
-                    'QCC_Translation_Cache'
-                );
-                break;
-                
-            case 'monitoring':
-                $layer_classes = array(
-                    'QCC_Performance_Monitor',
-                    'QCC_Error_Tracker',
-                    'QCC_Debug_Logger'
-                );
-                break;
-        }
-        
-        $loaded = 0;
-        foreach ($layer_classes as $class) {
-            if (self::load_class($class)) {
-                $loaded++;
-            }
-        }
-        
-        if (defined('QCC_DEBUG') && QCC_DEBUG) {
-            error_log("QCC: {$layer} layer classes loading: {$loaded}/" . count($layer_classes) . " loaded");
-        }
-        
-        return $loaded === count($layer_classes);
     }
     
     /**
      * Get autoloader statistics
      */
     public static function get_stats() {
-        $stats = array(
-            'total_classes' => count(self::$class_map),
-            'total_aliases' => count(self::$aliases),
-            'loaded_classes' => 0,
-            'missing_files' => 0,
-            'class_details' => array(),
-            'memory_usage' => memory_get_usage(true),
-            'registered' => self::$registered
+        return array(
+            'registered_classes' => count(self::$class_map),
+            'loaded_classes' => count(self::$loaded_classes),
+            'failed_loads' => count(self::$failed_loads),
+            'load_percentage' => count(self::$class_map) > 0 ? 
+                round((count(self::$loaded_classes) / count(self::$class_map)) * 100, 2) : 0,
+            'recent_failures' => array_slice(self::$failed_loads, -5), // Last 5 failures
+            'loaded_list' => self::$loaded_classes,
+            'autoloader_registered' => self::$registered
         );
-        
-        foreach (self::$class_map as $class => $file) {
-            $file_path = QCC_PLUGIN_PATH . 'includes/' . $file;
-            $exists = file_exists($file_path);
-            $loaded = class_exists($class);
-            
-            if (!$exists) {
-                $stats['missing_files']++;
-            }
-            
-            if ($loaded) {
-                $stats['loaded_classes']++;
-            }
-            
-            $stats['class_details'][$class] = array(
-                'file' => $file,
-                'file_exists' => $exists,
-                'class_loaded' => $loaded,
-                'file_path' => $file_path
-            );
-        }
-        
-        return $stats;
-    }
-    
-    /**
-     * Debug output for troubleshooting
-     */
-    public static function debug_output() {
-        if (!defined('QCC_DEBUG') || !QCC_DEBUG) {
-            return;
-        }
-        
-        echo "<div style='background: #f0f0f0; padding: 15px; margin: 10px; border: 1px solid #ccc; font-family: monospace;'>";
-        echo "<h3>🔧 QCC Autoloader Debug Information</h3>";
-        
-        $stats = self::get_stats();
-        echo "<p><strong>📊 Statistics:</strong></p>";
-        echo "<ul>";
-        echo "<li><strong>Total Classes:</strong> {$stats['total_classes']}</li>";
-        echo "<li><strong>Total Aliases:</strong> {$stats['total_aliases']}</li>";
-        echo "<li><strong>Loaded Classes:</strong> {$stats['loaded_classes']}</li>";
-        echo "<li><strong>Missing Files:</strong> {$stats['missing_files']}</li>";
-        echo "<li><strong>Autoloader Registered:</strong> " . ($stats['registered'] ? 'Yes' : 'No') . "</li>";
-        echo "<li><strong>Memory Usage:</strong> " . size_format($stats['memory_usage']) . "</li>";
-        echo "</ul>";
-        
-        if (!empty(self::$aliases)) {
-            echo "<p><strong>🔗 Aliases:</strong></p>";
-            echo "<ul>";
-            foreach (self::$aliases as $alias => $class) {
-                echo "<li><code>{$alias}</code> → <code>{$class}</code></li>";
-            }
-            echo "</ul>";
-        }
-        
-        echo "<p><strong>📁 Class Details:</strong></p>";
-        echo "<table border='1' cellpadding='5' cellspacing='0' style='width: 100%; font-size: 12px;'>";
-        echo "<tr style='background: #ddd;'><th>Class</th><th>File</th><th>Exists</th><th>Loaded</th><th>Layer</th></tr>";
-        
-        foreach ($stats['class_details'] as $class => $details) {
-            $file_status = $details['file_exists'] ? '✅' : '❌';
-            $class_status = $details['class_loaded'] ? '✅' : '❌';
-            $row_style = (!$details['file_exists'] || !$details['class_loaded']) ? 'background: #ffe6e6;' : '';
-            
-            // Determine layer
-            $layer = 'Legacy';
-            if (strpos($details['file'], 'core/') === 0) $layer = 'Core';
-            elseif (strpos($details['file'], 'presentation/') === 0) $layer = 'Presentation';
-            elseif (strpos($details['file'], 'rendering/') === 0) $layer = 'Rendering';
-            elseif (strpos($details['file'], 'business/') === 0) $layer = 'Business';
-            elseif (strpos($details['file'], 'translation/') === 0) $layer = 'Translation';
-            elseif (strpos($details['file'], 'assets/') === 0) $layer = 'Assets';
-            elseif (strpos($details['file'], 'services/') === 0) $layer = 'Services';
-            elseif (strpos($details['file'], 'infrastructure/') === 0) $layer = 'Infrastructure';
-            elseif (strpos($details['file'], 'monitoring/') === 0) $layer = 'Monitoring';
-            elseif (strpos($details['file'], 'admin/') === 0) $layer = 'Admin';
-            elseif (strpos($details['file'], 'interfaces/') === 0) $layer = 'Interface';
-            elseif (strpos($details['file'], 'legacy/') === 0) $layer = 'Legacy';
-            
-            echo "<tr style='{$row_style}'>";
-            echo "<td><code>{$class}</code></td>";
-            echo "<td>{$details['file']}</td>";
-            echo "<td>{$file_status}</td>";
-            echo "<td>{$class_status}</td>";
-            echo "<td><strong>{$layer}</strong></td>";
-            echo "</tr>";
-        }
-        
-        echo "</table>";
-        echo "</div>";
-    }
-    
-    /**
-     * Get classes by layer
-     */
-    public static function get_classes_by_layer($layer) {
-        $classes = array();
-        
-        foreach (self::$class_map as $class => $file) {
-            if (strpos($file, $layer . '/') === 0) {
-                $classes[] = $class;
-            }
-        }
-        
-        return $classes;
     }
     
     /**
@@ -682,7 +350,58 @@ class QCC_Autoloader {
         
         return $health;
     }
+    
+    /**
+     * Debug output for admin
+     */
+    public static function debug_output() {
+        if (!QCC_DEBUG || !current_user_can('manage_options')) {
+            return;
+        }
+        
+        $stats = self::get_stats();
+        $health = self::health_check();
+        
+        echo '<div style="background: #f0f0f0; padding: 15px; margin: 10px; border: 1px solid #ccc; font-family: monospace;">';
+        echo '<h3>🔧 QCC Autoloader Debug Information</h3>';
+        
+        echo '<p><strong>📊 Statistics:</strong></p>';
+        echo '<ul>';
+        echo '<li><strong>Total Classes:</strong> ' . $stats['registered_classes'] . '</li>';
+        echo '<li><strong>Loaded Classes:</strong> ' . $stats['loaded_classes'] . '</li>';
+        echo '<li><strong>Failed Loads:</strong> ' . $stats['failed_loads'] . '</li>';
+        echo '<li><strong>Load Percentage:</strong> ' . $stats['load_percentage'] . '%</li>';
+        echo '<li><strong>Autoloader Registered:</strong> ' . ($stats['autoloader_registered'] ? 'Yes' : 'No') . '</li>';
+        echo '</ul>';
+        
+        echo '<p><strong>🏥 Health Status:</strong> ' . strtoupper($health['status']) . '</p>';
+        if (!empty($health['issues'])) {
+            echo '<p><strong>Issues:</strong></p>';
+            echo '<ul>';
+            foreach ($health['issues'] as $issue) {
+                echo '<li style="color: red;">' . esc_html($issue) . '</li>';
+            }
+            echo '</ul>';
+        }
+        
+        if (!empty($stats['loaded_list'])) {
+            echo '<p><strong>✅ Loaded Classes:</strong></p>';
+            echo '<ul>';
+            foreach ($stats['loaded_list'] as $class) {
+                echo '<li style="color: green;">' . esc_html($class) . '</li>';
+            }
+            echo '</ul>';
+        }
+        
+        if (!empty($stats['recent_failures'])) {
+            echo '<p><strong>❌ Recent Failures:</strong></p>';
+            echo '<ul>';
+            foreach ($stats['recent_failures'] as $failure) {
+                echo '<li style="color: red;">' . esc_html($failure['class']) . ' - ' . esc_html($failure['reason']) . '</li>';
+            }
+            echo '</ul>';
+        }
+        
+        echo '</div>';
+    }
 }
-
-// Register autoloader immediately when file is loaded
-QCC_Autoloader::register();
