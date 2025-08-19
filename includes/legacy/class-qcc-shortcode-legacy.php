@@ -1032,7 +1032,7 @@ class QCC_Shortcode {
     private function get_currency_symbol($currency) {
         $symbols = array(
             'EUR' => '€',
-            'USD' => ',
+            'USD' => '$',
             'CNY' => '¥'
         );
         return isset($symbols[$currency]) ? $symbols[$currency] : '€';
@@ -1688,7 +1688,7 @@ if (!function_exists('qcc_format_german_currency')) {
             case 'EUR':
                 return $formatted_amount . ' €';
             case 'USD':
-                return $formatted_amount . ' ;
+                return $formatted_amount . ' $';
             case 'CNY':
                 return $formatted_amount . ' ¥';
             default:
