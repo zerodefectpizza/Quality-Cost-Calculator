@@ -1,5 +1,19 @@
 <?php
 /**
+ * QCC Bootstrap Class — Consolidated (cleaned)
+ * 
+ * This file merges the two previous variants:
+ * - class-qcc-bootstrap.php (modern)
+ * - class-qcc-bootstrap - ausgelagert.php (legacy/extracted)
+ * 
+ * Strategy: Keep the modern architecture and hooks.
+ * Legacy-only helpers were removed unless still referenced.
+ * 
+ * Date: 2025-08-18
+ */
+
+
+/**
  * QCC Bootstrap Class - Modern Plugin Initialization
  *
  * @package QualityCostCalculator
