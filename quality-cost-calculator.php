@@ -70,7 +70,7 @@ function qcc_init_plugin() {
         
         // Load bootstrap class
         if (class_exists('QCC_Bootstrap')) {
-            QCC_Bootstrap::init();
+            QCC_Bootstrap::initialize();
         } else {
             // Fallback to legacy system
             qcc_init_legacy_system();
