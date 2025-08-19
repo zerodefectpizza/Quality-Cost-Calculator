@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 /**
  * Shortcode Class - Vollständig übersetzt für deutsche Sprache
  */
-class QCC_Shortcode {
+class QCC_Shortcode_Legacy {
     
     /**
      * Constructor
@@ -24,7 +24,7 @@ class QCC_Shortcode {
         
         // Debug logging
         if (class_exists('QCC_Debug_Logger')) {
-            QCC_Debug_Logger::log('QCC_Shortcode initialized and shortcode registered', 'SHORTCODE');
+            QCC_Debug_Logger::log('QCC_Shortcode_Legacy initialized and shortcode registered', 'SHORTCODE');
         }
         
         // Verify shortcode registration
@@ -1753,7 +1753,7 @@ if (!function_exists('qcc_berechne_qualitaetskosten')) {
 // =============================================================================
 
 if (class_exists('QCC_Debug_Logger')) {
-    QCC_Debug_Logger::log('QCC_Shortcode Klasse mit vollständiger deutscher Sprachunterstützung geladen', 'SHORTCODE_DE');
+    QCC_Debug_Logger::log('QCC_Shortcode_Legacy Klasse mit vollständiger deutscher Sprachunterstützung geladen', 'SHORTCODE_DE');
     QCC_Debug_Logger::log('Deutsche Übersetzungen für alle UI-Elemente hinzugefügt', 'SHORTCODE_DE');
     QCC_Debug_Logger::log('Deutsche Hilfsfunktionen für Währungsformatierung und Berechnungen verfügbar', 'SHORTCODE_DE');
     QCC_Debug_Logger::log('COGQ/COPQ Analyse mit deutschen Begriffen implementiert', 'SHORTCODE_DE');
