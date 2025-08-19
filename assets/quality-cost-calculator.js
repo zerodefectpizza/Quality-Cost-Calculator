@@ -1,6 +1,7 @@
 /**
  * Quality Cost Calculator - Sofort funktionsfähige Version
  * Einfach und robust - GARANTIERT FUNKTIONSFÄHIG
+ * ERWEITERT: Automatische Standardwerte beim Laden
  */
 
 console.log('QCC: Loading...');
@@ -8,9 +9,53 @@ console.log('QCC: Loading...');
 (function() {
     'use strict';
     
+    // STANDARDWERTE DEFINIEREN
+    const DEFAULT_VALUES = {
+        'revenue': '140',
+        'quality-percentage': '6',
+        'prevention': '10',
+        'appraisal': '20',
+        'internal-defect': '30',
+        'external-defect': '40',
+        'lost-sales': '5',
+        'customer-churn': '2',
+        'market-share-loss': '1',
+        'productivity-loss': '3'
+    };
+    
     // Hilfsfunktion
     function getEl(id) {
         return document.getElementById('qcc-' + id);
+    }
+    
+    // STANDARDWERTE LADEN - NEUE FUNKTION
+    function loadDefaultValues() {
+        console.log('QCC: Loading default values...');
+        
+        for (const id in DEFAULT_VALUES) {
+            const element = getEl(id);
+            if (element) {
+                // Nur setzen wenn leer oder 0
+                if (!element.value || element.value === '0' || element.value === '') {
+                    element.value = DEFAULT_VALUES[id];
+                    console.log('QCC: Set default for', id, '=', DEFAULT_VALUES[id]);
+                }
+            } else {
+                console.log('QCC: Element not found:', 'qcc-' + id);
+            }
+        }
+        
+        console.log('QCC: Default values loaded');
+    }
+    
+    // STANDARDWERTE SCHÜTZEN - NEUE FUNKTION
+    function protectDefaultValues() {
+        for (const id in DEFAULT_VALUES) {
+            const element = getEl(id);
+            if (element && (!element.value || element.value === '0' || element.value === '')) {
+                element.value = DEFAULT_VALUES[id];
+            }
+        }
     }
     
     // Hauptberechnung
@@ -240,17 +285,19 @@ console.log('QCC: Loading...');
         }, 100);
     }
     
-    // Reset
+    // Reset - ERWEITERT: Nutzt jetzt DEFAULT_VALUES
     function resetDefaults() {
-        console.log('QCC: Resetting...');
+        console.log('QCC: Resetting to defaults...');
         
         try {
-            if (getEl('revenue')) getEl('revenue').value = '140';
-            if (getEl('quality-percentage')) getEl('quality-percentage').value = '6';
-            if (getEl('prevention')) getEl('prevention').value = '10';
-            if (getEl('appraisal')) getEl('appraisal').value = '20';
-            if (getEl('internal-defect')) getEl('internal-defect').value = '30';
-            if (getEl('external-defect')) getEl('external-defect').value = '40';
+            // Verwende die DEFAULT_VALUES Konstante
+            for (const id in DEFAULT_VALUES) {
+                const element = getEl(id);
+                if (element) {
+                    element.value = DEFAULT_VALUES[id];
+                    console.log('QCC: Reset', id, 'to', DEFAULT_VALUES[id]);
+                }
+            }
             
             setTimeout(calculate, 50);
         } catch (error) {
@@ -258,7 +305,7 @@ console.log('QCC: Loading...');
         }
     }
     
-    // Event Listeners
+    // Event Listeners - ERWEITERT: Input-Protection
     function setupEvents() {
         console.log('QCC: Setting up events...');
         
@@ -271,8 +318,29 @@ console.log('QCC: Loading...');
         inputIds.forEach(function(id) {
             const el = getEl(id);
             if (el) {
-                el.addEventListener('input', calculate);
-                console.log('QCC: Event added to', id);
+                // Input Event für Berechnung
+                el.addEventListener('input', function() {
+                    // Schutz vor leeren Werten
+                    if (!el.value && DEFAULT_VALUES[id]) {
+                        setTimeout(function() {
+                            if (!el.value) {
+                                el.value = DEFAULT_VALUES[id];
+                                console.log('QCC: Restored default for', id);
+                            }
+                        }, 100);
+                    }
+                    calculate();
+                });
+                
+                // Focus Event für Standardwert-Wiederherstellung
+                el.addEventListener('focus', function() {
+                    if (!el.value && DEFAULT_VALUES[id]) {
+                        el.value = DEFAULT_VALUES[id];
+                        console.log('QCC: Set default on focus for', id);
+                    }
+                });
+                
+                console.log('QCC: Events added to', id);
             }
         });
         
@@ -322,31 +390,61 @@ console.log('QCC: Loading...');
         }
     }
     
+    // PERIODISCHER SCHUTZ - NEUE FUNKTION
+    function setupPeriodicProtection() {
+        // Alle 3 Sekunden prüfen und Standardwerte wiederherstellen
+        setInterval(function() {
+            protectDefaultValues();
+        }, 3000);
+        
+        console.log('QCC: Periodic protection active');
+    }
+    
     // Globales QCC Objekt
     window.QCC = {
         calculate: calculate,
         resetToDefaults: resetDefaults,
         exportToCSV: exportCSV,
         exportToPDF: function() { window.print(); },
-        toggleOpportunityCosts: toggleOpportunity
+        toggleOpportunityCosts: toggleOpportunity,
+        loadDefaultValues: loadDefaultValues,  // NEU
+        protectDefaultValues: protectDefaultValues  // NEU
     };
     
-    // Initialisierung
+    // Initialisierung - ERWEITERT
     function init() {
-        console.log('QCC: Initializing...');
+        console.log('QCC: Initializing with default values...');
         
+        // 1. ZUERST: Standardwerte laden
+        loadDefaultValues();
+        
+        // 2. Events setup
         setupEvents();
         
-        // Toggle-Status initialisieren
+        // 3. Periodischen Schutz aktivieren
+        setupPeriodicProtection();
+        
+        // 4. Toggle-Status initialisieren
         setTimeout(function() {
             initializeToggle();
         }, 200);
         
-        // Sofort berechnen
+        // 5. Standardwerte nochmals sicherstellen
+        setTimeout(function() {
+            loadDefaultValues();
+        }, 500);
+        
+        // 6. Sofort berechnen
         setTimeout(function() {
             calculate();
-            console.log('QCC: Ready!');
-        }, 300);
+            console.log('QCC: Ready with default values!');
+        }, 600);
+        
+        // 7. Finaler Schutz nach 2 Sekunden
+        setTimeout(function() {
+            protectDefaultValues();
+            console.log('QCC: Final protection applied');
+        }, 2000);
     }
     
     // DOM Ready
@@ -379,4 +477,12 @@ window.toggleOpportunityCosts = function() {
     }
 };
 
-console.log('QCC: Script loaded!');
+// NOTFALL-STANDARDWERTE - Globale Funktion
+window.forceQCCDefaults = function() {
+    console.log('QCC: Emergency default values triggered');
+    if (window.QCC && window.QCC.loadDefaultValues) {
+        window.QCC.loadDefaultValues();
+    }
+};
+
+console.log('QCC: Script loaded with default values support!');

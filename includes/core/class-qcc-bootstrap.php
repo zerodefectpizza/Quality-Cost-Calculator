@@ -1,6 +1,6 @@
 <?php
 /**
- * QCC Bootstrap - Minimale, Syntax-sichere Version
+ * QCC Bootstrap - Super-sichere Version ohne Syntax-Fehler
  * 
  * ERSETZEN: wp-content/plugins/quality-cost-calculator/includes/core/class-qcc-bootstrap.php
  * 
@@ -13,37 +13,28 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-/**
- * QCC Bootstrap Class
- */
-class QCC_Bootstrap {
-    
+class QCC_Bootstrap 
+{
     private static $instance = null;
     private $container = null;
     private $initialized = false;
     
-    /**
-     * Get singleton instance
-     */
-    public static function get_instance() {
+    public static function get_instance() 
+    {
         if (self::$instance === null) {
             self::$instance = new self();
         }
         return self::$instance;
     }
     
-    /**
-     * Initialize the plugin
-     */
-    public static function initialize() {
+    public static function initialize() 
+    {
         $instance = self::get_instance();
         return $instance->init();
     }
     
-    /**
-     * Main initialization
-     */
-    private function init() {
+    private function init() 
+    {
         if ($this->initialized) {
             return true;
         }
@@ -67,10 +58,8 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Initialize service container
-     */
-    private function init_service_container() {
+    private function init_service_container() 
+    {
         if (!class_exists('QCC_Service_Container')) {
             $container_file = QCC_PLUGIN_PATH . 'includes/core/class-qcc-service-container.php';
             if (file_exists($container_file)) {
@@ -84,19 +73,15 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Register core services
-     */
-    private function register_core_services() {
+    private function register_core_services() 
+    {
         $this->container->register('calculator', array($this, 'create_calculator_service'));
         $this->container->register('validator', array($this, 'create_validator_service'));
         $this->container->register('renderer', array($this, 'create_renderer_service'));
     }
     
-    /**
-     * Setup WordPress hooks
-     */
-    private function setup_hooks() {
+    private function setup_hooks() 
+    {
         if (!is_admin()) {
             add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
         }
@@ -110,10 +95,8 @@ class QCC_Bootstrap {
         add_action('wp_ajax_nopriv_qcc_calculate', array($this, 'handle_ajax_calculation'));
     }
     
-    /**
-     * Register shortcodes
-     */
-    private function register_shortcodes() {
+    private function register_shortcodes() 
+    {
         add_shortcode('quality_cost_calculator', array($this, 'render_shortcode'));
         add_shortcode('qcc_calculator', array($this, 'render_shortcode'));
         add_shortcode('cost_quality_calculator', array($this, 'render_shortcode'));
@@ -123,10 +106,8 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Render shortcode
-     */
-    public function render_shortcode($atts = array(), $content = '') {
+    public function render_shortcode($atts = array(), $content = '') 
+    {
         try {
             $renderer = $this->container ? $this->container->get('renderer') : null;
             
@@ -144,10 +125,8 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Handle AJAX calculation
-     */
-    public function handle_ajax_calculation() {
+    public function handle_ajax_calculation() 
+    {
         try {
             if (!wp_verify_nonce($_POST['nonce'], 'qcc_nonce')) {
                 wp_die('Security check failed');
@@ -169,10 +148,8 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Prepare input data
-     */
-    private function prepare_input_data($post_data) {
+    private function prepare_input_data($post_data) 
+    {
         $data = array();
         
         $data['revenue'] = $this->get_post_value($post_data, 'revenue', 0);
@@ -185,20 +162,16 @@ class QCC_Bootstrap {
         return $data;
     }
     
-    /**
-     * Get POST value
-     */
-    private function get_post_value($post_data, $key, $default = 0) {
+    private function get_post_value($post_data, $key, $default = 0) 
+    {
         if (isset($post_data[$key])) {
             return floatval($post_data[$key]);
         }
         return $default;
     }
     
-    /**
-     * Enqueue frontend assets
-     */
-    public function enqueue_frontend_assets() {
+    public function enqueue_frontend_assets() 
+    {
         if (!$this->should_load_frontend_assets()) {
             return;
         }
@@ -212,21 +185,39 @@ class QCC_Bootstrap {
         if (file_exists(QCC_PLUGIN_PATH . 'assets/quality-cost-calculator.js')) {
             wp_enqueue_script('qcc-frontend', $js_file, array('jquery'), QCC_PLUGIN_VERSION, true);
             
-            wp_localize_script('qcc-frontend', 'qcc_config', array(
-                'ajax_url' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('qcc_nonce'),
-                'strings' => array(
-                    'calculating' => __('Calculating...', QCC_TEXT_DOMAIN),
-                    'error' => __('Calculation failed', QCC_TEXT_DOMAIN)
-                )
-            ));
+            $config = array();
+            $config['ajax_url'] = admin_url('admin-ajax.php');
+            $config['nonce'] = wp_create_nonce('qcc_nonce');
+            
+            $config['strings'] = array();
+            $config['strings']['calculating'] = __('Calculating...', QCC_TEXT_DOMAIN);
+            $config['strings']['error'] = __('Calculation failed', QCC_TEXT_DOMAIN);
+            
+            $config['default_values'] = array();
+            $config['default_values']['revenue'] = 140;
+            $config['default_values']['quality_percentage'] = 6;
+            $config['default_values']['prevention'] = 10;
+            $config['default_values']['appraisal'] = 20;
+            $config['default_values']['internal_defect'] = 30;
+            $config['default_values']['external_defect'] = 40;
+            $config['default_values']['lost_sales'] = 5;
+            $config['default_values']['customer_churn'] = 2;
+            $config['default_values']['market_share_loss'] = 1;
+            $config['default_values']['productivity_loss'] = 3;
+            
+            $config['preserve_values'] = true;
+            $config['auto_calculate'] = false;
+            $config['live_validation'] = false;
+            $config['debug'] = QCC_DEBUG;
+            
+            wp_localize_script('qcc-frontend', 'qcc_config', $config);
+        } else {
+            wp_add_inline_script('jquery', $this->get_fallback_js());
         }
     }
     
-    /**
-     * Enqueue admin assets
-     */
-    public function enqueue_admin_assets($hook) {
+    public function enqueue_admin_assets($hook) 
+    {
         if (strpos($hook, 'quality-cost-calculator') === false) {
             return;
         }
@@ -237,10 +228,8 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Register admin menu
-     */
-    public function register_admin_menu() {
+    public function register_admin_menu() 
+    {
         add_menu_page(
             __('Quality Cost Calculator', QCC_TEXT_DOMAIN),
             __('QCC Settings', QCC_TEXT_DOMAIN),
@@ -252,10 +241,8 @@ class QCC_Bootstrap {
         );
     }
     
-    /**
-     * Render admin page
-     */
-    public function render_admin_page() {
+    public function render_admin_page() 
+    {
         if (!current_user_can('manage_options')) {
             wp_die(__('You do not have sufficient permissions to access this page.', QCC_TEXT_DOMAIN));
         }
@@ -311,10 +298,8 @@ class QCC_Bootstrap {
         <?php
     }
     
-    /**
-     * Get default settings
-     */
-    private function get_default_settings() {
+    private function get_default_settings() 
+    {
         $defaults = array();
         $defaults['default_currency'] = '€';
         $defaults['default_revenue'] = 1000000;
@@ -324,10 +309,8 @@ class QCC_Bootstrap {
         return $defaults;
     }
     
-    /**
-     * Save admin settings
-     */
-    private function save_admin_settings() {
+    private function save_admin_settings() 
+    {
         $settings = array();
         $settings['default_currency'] = sanitize_text_field($_POST['default_currency']);
         $settings['default_revenue'] = intval($_POST['default_revenue']);
@@ -338,10 +321,8 @@ class QCC_Bootstrap {
         update_option('qcc_settings', $settings);
     }
     
-    /**
-     * Render plugin status
-     */
-    private function render_plugin_status() {
+    private function render_plugin_status() 
+    {
         $bootstrap_status = $this->is_initialized() ? '✅ Active' : '❌ Failed';
         $container_status = $this->container ? '✅ Loaded' : '❌ Missing';
         $services_count = $this->container ? count($this->container->get_service_names()) : 0;
@@ -356,10 +337,8 @@ class QCC_Bootstrap {
         echo '</table>';
     }
     
-    /**
-     * Create calculator service
-     */
-    public function create_calculator_service() {
+    public function create_calculator_service() 
+    {
         if (class_exists('QCC_Calculation_Engine')) {
             return new QCC_Calculation_Engine();
         }
@@ -367,24 +346,18 @@ class QCC_Bootstrap {
         return new QCC_Basic_Calculator();
     }
     
-    /**
-     * Create validator service
-     */
-    public function create_validator_service() {
+    public function create_validator_service() 
+    {
         return new QCC_Basic_Validator();
     }
     
-    /**
-     * Create renderer service
-     */
-    public function create_renderer_service() {
+    public function create_renderer_service() 
+    {
         return new QCC_Template_Renderer();
     }
     
-    /**
-     * Should load frontend assets
-     */
-    private function should_load_frontend_assets() {
+    private function should_load_frontend_assets() 
+    {
         global $post;
         
         if (is_a($post, 'WP_Post')) {
@@ -396,10 +369,8 @@ class QCC_Bootstrap {
         return false;
     }
     
-    /**
-     * Emergency fallback
-     */
-    private function emergency_fallback() {
+    private function emergency_fallback() 
+    {
         add_shortcode('quality_cost_calculator', array($this, 'render_emergency_shortcode'));
         add_shortcode('qcc_calculator', array($this, 'render_emergency_shortcode'));
         add_shortcode('cost_quality_calculator', array($this, 'render_emergency_shortcode'));
@@ -407,37 +378,242 @@ class QCC_Bootstrap {
         return false;
     }
     
-    /**
-     * Render emergency shortcode
-     */
-    public function render_emergency_shortcode($atts) {
+    public function render_emergency_shortcode($atts) 
+    {
         return '<div class="qcc-emergency" style="padding: 20px; border: 1px solid #ff6b6b; background: #ffe6e6; color: #d63031; border-radius: 5px;">
             <strong>Quality Cost Calculator:</strong> Bootstrap initialization failed.
             <br><small>Running in emergency mode.</small>
         </div>';
     }
     
-    /**
-     * Render error message
-     */
-    private function render_error_message($message) {
+    private function render_error_message($message) 
+    {
         return '<div class="qcc-error" style="padding: 15px; border: 1px solid #ff6b6b; background: #ffe6e6; color: #d63031; border-radius: 4px;">
             <strong>Error:</strong> ' . esc_html($message) . '
         </div>';
     }
     
-    /**
-     * Render basic calculator
-     */
-    private function render_basic_calculator($atts) {
+    private function render_basic_calculator($atts) 
+    {
         $renderer = $this->create_renderer_service();
         return $renderer->render($atts);
     }
     
-    /**
-     * Plugin activation
-     */
-    public static function activate() {
+    private function get_fallback_js() 
+    {
+        return "
+        // QCC STRONG PROTECTION JavaScript - Überschreibt alle anderen Scripts
+        (function() {
+            console.log('QCC: STRONG PROTECTION aktiv - Override-Modus');
+            
+            // Standard-Werte FEST definiert
+            var QCC_PROTECTED_DEFAULTS = {
+                'qcc-revenue': 140,
+                'revenue': 140,
+                'qcc-quality-percentage': 6,
+                'quality_percentage': 6,
+                'quality-percentage': 6,
+                'qcc-prevention': 10,
+                'prevention': 10,
+                'prevention-costs': 10,
+                'qcc-appraisal': 20,
+                'appraisal': 20,
+                'appraisal-costs': 20,
+                'qcc-internal-defect': 30,
+                'internal_defect': 30,
+                'internal-defect': 30,
+                'internal-defect-costs': 30,
+                'qcc-external-defect': 40,
+                'external_defect': 40,
+                'external-defect': 40,
+                'external-defect-costs': 40,
+                'qcc-lost-sales': 5,
+                'lost_sales': 5,
+                'lost-sales': 5,
+                'qcc-customer-churn': 2,
+                'customer_churn': 2,
+                'customer-churn': 2,
+                'qcc-market-share-loss': 1,
+                'market_share_loss': 1,
+                'market-share-loss': 1,
+                'qcc-productivity-loss': 3,
+                'productivity_loss': 3,
+                'productivity-loss': 3
+            };
+            
+            // SCHUTZ-FUNKTIONEN
+            function forceSetDefaultValues() {
+                for (var id in QCC_PROTECTED_DEFAULTS) {
+                    var element = document.getElementById(id);
+                    if (element && element.type === 'number') {
+                        var newValue = QCC_PROTECTED_DEFAULTS[id];
+                        if (element.value !== newValue.toString()) {
+                            element.value = newValue;
+                            console.log('QCC: FORCED default value for ' + id + ' = ' + newValue);
+                        }
+                    }
+                }
+                
+                // Auch per name-Attribut suchen
+                for (var name in QCC_PROTECTED_DEFAULTS) {
+                    var elements = document.querySelectorAll('input[name=\"' + name + '\"]');
+                    elements.forEach(function(element) {
+                        if (element.type === 'number') {
+                            var newValue = QCC_PROTECTED_DEFAULTS[name];
+                            if (element.value !== newValue.toString()) {
+                                element.value = newValue;
+                                console.log('QCC: FORCED default value by name ' + name + ' = ' + newValue);
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // OVERRIDE alle Form-Reset-Funktionen
+            function protectAgainstResets() {
+                // Override native form reset
+                var forms = document.querySelectorAll('form');
+                forms.forEach(function(form) {
+                    form.addEventListener('reset', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('QCC: BLOCKED form reset event');
+                        setTimeout(forceSetDefaultValues, 10);
+                        return false;
+                    }, true);
+                });
+                
+                // Override QCC reset functions
+                if (window.QCC && window.QCC.reset) {
+                    var originalReset = window.QCC.reset;
+                    window.QCC.reset = function() {
+                        console.log('QCC: BLOCKED QCC.reset() call');
+                        forceSetDefaultValues();
+                        return false;
+                    };
+                }
+                
+                // Override resetDefaults function
+                if (window.resetDefaults) {
+                    var originalResetDefaults = window.resetDefaults;
+                    window.resetDefaults = function() {
+                        console.log('QCC: BLOCKED resetDefaults() call');
+                        forceSetDefaultValues();
+                        return false;
+                    };
+                }
+                
+                // Override any other reset functions
+                ['resetForm', 'clearForm', 'clearValues', 'resetCalculator'].forEach(function(funcName) {
+                    if (window[funcName]) {
+                        window[funcName] = function() {
+                            console.log('QCC: BLOCKED ' + funcName + '() call');
+                            forceSetDefaultValues();
+                            return false;
+                        };
+                    }
+                });
+            }
+            
+            // MUTATION OBSERVER - Überwacht DOM-Änderungen
+            function setupMutationObserver() {
+                if (typeof MutationObserver !== 'undefined') {
+                    var observer = new MutationObserver(function(mutations) {
+                        var needsCheck = false;
+                        mutations.forEach(function(mutation) {
+                            if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                                needsCheck = true;
+                            }
+                            if (mutation.type === 'childList') {
+                                needsCheck = true;
+                            }
+                        });
+                        if (needsCheck) {
+                            setTimeout(forceSetDefaultValues, 50);
+                        }
+                    });
+                    
+                    observer.observe(document.body, {
+                        attributes: true,
+                        childList: true,
+                        subtree: true,
+                        attributeFilter: ['value']
+                    });
+                    
+                    console.log('QCC: MutationObserver aktiv');
+                }
+            }
+            
+            // INPUT EVENT PROTECTION
+            function protectInputEvents() {
+                document.addEventListener('input', function(e) {
+                    if (e.target.type === 'number') {
+                        var id = e.target.id || e.target.name;
+                        if (QCC_PROTECTED_DEFAULTS[id] && (!e.target.value || e.target.value === '')) {
+                            setTimeout(function() {
+                                e.target.value = QCC_PROTECTED_DEFAULTS[id];
+                                console.log('QCC: RESTORED empty field ' + id);
+                            }, 10);
+                        }
+                    }
+                }, true);
+            }
+            
+            // AGGRESSIVE TIMING PROTECTION
+            function setupAggressiveProtection() {
+                // Sofort setzen
+                forceSetDefaultValues();
+                
+                // Multiple Timeouts
+                setTimeout(forceSetDefaultValues, 50);
+                setTimeout(forceSetDefaultValues, 100);
+                setTimeout(forceSetDefaultValues, 200);
+                setTimeout(forceSetDefaultValues, 500);
+                setTimeout(forceSetDefaultValues, 1000);
+                setTimeout(forceSetDefaultValues, 2000);
+                setTimeout(forceSetDefaultValues, 5000);
+                
+                // Interval für kontinuierlichen Schutz
+                setInterval(function() {
+                    forceSetDefaultValues();
+                }, 3000);
+                
+                console.log('QCC: Aggressive protection timers aktiv');
+            }
+            
+            // MAIN INITIALIZATION
+            function initStrongProtection() {
+                console.log('QCC: Strong Protection wird initialisiert...');
+                
+                forceSetDefaultValues();
+                protectAgainstResets();
+                protectInputEvents();
+                setupMutationObserver();
+                setupAggressiveProtection();
+                
+                console.log('QCC: Strong Protection vollständig aktiv!');
+            }
+            
+            // IMMEDIATE EXECUTION
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initStrongProtection);
+            } else {
+                initStrongProtection();
+            }
+            
+            // JQUERY READY BACKUP
+            if (window.jQuery) {
+                jQuery(document).ready(function() {
+                    setTimeout(initStrongProtection, 100);
+                });
+            }
+            
+        })();
+        ";
+    }
+    
+    public static function activate() 
+    {
         add_option('qcc_version', QCC_PLUGIN_VERSION);
         add_option('qcc_activated', true);
         flush_rewrite_rules();
@@ -447,10 +623,8 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Plugin deactivation
-     */
-    public static function deactivate() {
+    public static function deactivate() 
+    {
         delete_transient('qcc_system_check');
         flush_rewrite_rules();
         
@@ -459,10 +633,8 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Plugin uninstall
-     */
-    public static function uninstall() {
+    public static function uninstall() 
+    {
         delete_option('qcc_version');
         delete_option('qcc_activated');
         delete_option('qcc_settings');
@@ -473,26 +645,21 @@ class QCC_Bootstrap {
         }
     }
     
-    /**
-     * Get service container
-     */
-    public function get_container() {
+    public function get_container() 
+    {
         return $this->container;
     }
     
-    /**
-     * Check if initialized
-     */
-    public function is_initialized() {
+    public function is_initialized() 
+    {
         return $this->initialized;
     }
 }
 
-/**
- * Basic Calculator Class
- */
-class QCC_Basic_Calculator {
-    public function calculate($data) {
+class QCC_Basic_Calculator 
+{
+    public function calculate($data) 
+    {
         $revenue = $data['revenue'];
         $quality_basis = $data['quality_basis'] / 100;
         
@@ -516,13 +683,12 @@ class QCC_Basic_Calculator {
     }
 }
 
-/**
- * Basic Validator Class
- */
-class QCC_Basic_Validator {
+class QCC_Basic_Validator 
+{
     private $errors = array();
     
-    public function validate($data) {
+    public function validate($data) 
+    {
         $this->errors = array();
         
         if (!is_numeric($data['revenue']) || $data['revenue'] < 0) {
@@ -539,16 +705,16 @@ class QCC_Basic_Validator {
         return empty($this->errors);
     }
     
-    public function get_errors() {
+    public function get_errors() 
+    {
         return $this->errors;
     }
 }
 
-/**
- * Template Renderer Class
- */
-class QCC_Template_Renderer {
-    public function render($atts, $content = '') {
+class QCC_Template_Renderer 
+{
+    public function render($atts, $content = '') 
+    {
         $template_file = QCC_PLUGIN_PATH . 'templates/calculator.php';
         if (file_exists($template_file)) {
             return $this->render_with_template($template_file, $atts);
@@ -557,7 +723,8 @@ class QCC_Template_Renderer {
         return $this->render_basic_html($atts);
     }
     
-    private function render_with_template($template_file, $atts) {
+    private function render_with_template($template_file, $atts) 
+    {
         ob_start();
         
         $defaults = array();
@@ -583,29 +750,97 @@ class QCC_Template_Renderer {
         $data['default_values']['market_share_loss'] = 1;
         $data['default_values']['productivity_loss'] = 3;
         
+        $data['sections'] = array();
+        $data['sections']['basic'] = array(
+            'title' => 'Basic Parameters',
+            'description' => 'Revenue and Quality Cost',
+            'fields' => array('revenue', 'quality_percentage'),
+            'icon' => 'calculator',
+            'collapsible' => false
+        );
+        $data['sections']['cogq'] = array(
+            'title' => 'Cost of Good Quality',
+            'description' => 'Prevention and Appraisal Costs',
+            'fields' => array('prevention', 'appraisal'),
+            'icon' => 'shield-check',
+            'collapsible' => true,
+            'color' => 'green'
+        );
+        $data['sections']['copq'] = array(
+            'title' => 'Cost of Poor Quality',
+            'description' => 'Internal and External Defects',
+            'fields' => array('internal_defect', 'external_defect'),
+            'icon' => 'alert-triangle',
+            'collapsible' => true,
+            'color' => 'red'
+        );
+        $data['sections']['opportunity'] = array(
+            'title' => 'Opportunity Costs',
+            'description' => 'Additional Business Impact',
+            'fields' => array('lost_sales', 'customer_churn', 'market_share_loss', 'productivity_loss'),
+            'icon' => 'trending-up',
+            'collapsible' => true,
+            'color' => 'blue',
+            'optional' => true
+        );
+        
+        $data['layout'] = 'vertical';
+        $data['validation_mode'] = 'live';
+        $data['auto_calculate'] = true;
+        $data['show_reset'] = true;
+        $data['show_save'] = false;
+        $data['style'] = 'default';
+        
         $helpers = array();
         $helpers['generate_section_id'] = array($this, 'generate_section_id');
         $helpers['get_currency_symbol'] = array($this, 'get_currency_symbol');
         $helpers['escape'] = 'esc_html';
+        $helpers['generate_id'] = array($this, 'generate_id');
+        $helpers['build_css_classes'] = array($this, 'build_css_classes');
         
         $translator = new QCC_Basic_Translator();
+        
+        if (QCC_DEBUG) {
+            error_log('QCC Template Data: ' . print_r($data['default_values'], true));
+        }
         
         include $template_file;
         return ob_get_clean();
     }
     
-    public function generate_section_id($data) {
+    public function generate_section_id($data) 
+    {
         return 'qcc-section-' . uniqid();
     }
     
-    public function get_currency_symbol($currency) {
+    public function get_currency_symbol($currency) 
+    {
         if ($currency === 'EUR') return '€';
         if ($currency === 'USD') return '$';
         if ($currency === 'GBP') return '£';
         return '€';
     }
     
-    private function render_basic_html($atts) {
+    public function generate_id($prefix = 'qcc') 
+    {
+        return $prefix . '-' . uniqid();
+    }
+    
+    public function build_css_classes($base_classes, $conditional_classes = array()) 
+    {
+        $classes = is_array($base_classes) ? $base_classes : array($base_classes);
+        
+        foreach ($conditional_classes as $class => $condition) {
+            if ($condition) {
+                $classes[] = $class;
+            }
+        }
+        
+        return implode(' ', $classes);
+    }
+    
+    private function render_basic_html($atts) 
+    {
         $defaults = array();
         $defaults['currency'] = '€';
         $defaults['default_revenue'] = 1000000;
@@ -705,11 +940,10 @@ class QCC_Template_Renderer {
     }
 }
 
-/**
- * Basic Translator Class
- */
-class QCC_Basic_Translator {
-    public function get($key) {
+class QCC_Basic_Translator 
+{
+    public function get($key) 
+    {
         $translations = array();
         $translations['basic_parameters'] = 'Basic Parameters';
         $translations['revenue_and_quality_cost'] = 'Revenue and Quality Cost';
