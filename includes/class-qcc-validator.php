@@ -313,7 +313,9 @@ class QCC_Validator {
             )
         );
     }
-} input data
+
+    /**
+     * Validate input data
      */
     public static function validate_input($data) {
         self::$errors = array();
@@ -546,6 +548,5 @@ class QCC_Validator {
     public static function add_error($field, $message) {
         self::$errors[$field] = $message;
     }
-    
-    /**
-     * Validate
+}
+
