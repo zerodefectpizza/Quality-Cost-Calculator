@@ -323,39 +323,126 @@ class QCC_Debug_Logger {
     }
     
     /**
-     * Log message
-     * 
+     * Backward compatible static logging method.
+     *
+     * Supports both the new signature log( $level, $message, $context, $channel )
+     * and the legacy usage log( $message, $level_or_channel ).
+     *
+     * @since 3.0.1
+     * @param mixed  $arg1    Log level or message depending on usage.
+     * @param mixed  $arg2    Message or level/channel depending on usage.
+     * @param array  $context Optional context data.
+     * @param string $channel Optional channel when level is provided.
+     * @return void
+     */
+    public static function log($arg1, $arg2 = '', $context = array(), $channel = 'qcc') {
+        $instance = self::get_instance();
+
+        // Determine if first argument is a valid level
+        $arg1_lower = strtolower((string) $arg1);
+        if (isset(self::LOG_LEVELS[$arg1_lower])) {
+            $level   = $arg1_lower;
+            $message = $arg2;
+        } else {
+            $message = $arg1;
+            $arg2_lower = strtolower((string) $arg2);
+            if (isset(self::LOG_LEVELS[$arg2_lower])) {
+                $level = $arg2_lower;
+            } else {
+                $level   = 'debug';
+                $channel = $arg2 ? $arg2 : $channel;
+            }
+        }
+
+        $instance->add_log($level, $message, $context, $channel);
+    }
+
+    /**
+     * Core logging implementation used by the static wrapper.
+     *
      * @since 3.0.0
-     * @param string $level Log level
+     * @param string $level   Log level
      * @param string $message Log message
      * @param array  $context Context data
      * @param string $channel Log channel
      * @return void
      */
-    public function log($level, $message, $context = array(), $channel = 'qcc') {
+    private function add_log($level, $message, $context = array(), $channel = 'qcc') {
         if (!$this->logging_enabled || !$this->should_log($level)) {
             return;
         }
-        
+
         // Filter check
         if (!$this->passes_filters($context)) {
             return;
         }
-        
+
         $log_entry = $this->create_log_entry($level, $message, $context, $channel);
-        
+
         // Update statistics
         $this->update_stats($level);
-        
+
         // Add to buffer
         $this->log_buffer[] = $log_entry;
-        
+
         // Auto flush if buffer is full or for critical levels
-        if ($this->config['auto_flush'] && 
-            (count($this->log_buffer) >= $this->config['buffer_size'] || 
+        if ($this->config['auto_flush'] &&
+            (count($this->log_buffer) >= $this->config['buffer_size'] ||
              in_array($level, array('emergency', 'alert', 'critical', 'error')))) {
             $this->flush_buffer();
         }
+    }
+
+    /**
+     * Static shortcut for error level logging.
+     *
+     * @since 3.0.1
+     * @param string $message Log message
+     * @param array  $context Optional context data
+     * @param string $channel Optional log channel
+     * @return void
+     */
+    public static function log_error($message, $context = array(), $channel = 'qcc') {
+        self::log('error', $message, $context, $channel);
+    }
+
+    /**
+     * Static shortcut for warning level logging.
+     *
+     * @since 3.0.1
+     * @param string $message Log message
+     * @param array  $context Optional context data
+     * @param string $channel Optional log channel
+     * @return void
+     */
+    public static function log_warning($message, $context = array(), $channel = 'qcc') {
+        self::log('warning', $message, $context, $channel);
+    }
+
+    /**
+     * Static shortcut for info level logging.
+     *
+     * @since 3.0.1
+     * @param string $message Log message
+     * @param array  $context Optional context data
+     * @param string $channel Optional log channel
+     * @return void
+     */
+    public static function log_info($message, $context = array(), $channel = 'qcc') {
+        self::log('info', $message, $context, $channel);
+    }
+
+    /**
+     * Static shortcut for debug level logging.
+     *
+     * @since 3.0.1
+     * @param string $message Log message
+     * @param array  $context Optional context data
+     * @param string $channel Optional log channel
+     * @return void
+     */
+    public static function log_debug($message, $context = array(), $channel = 'qcc') {
+        self::log('debug', $message, $context, $channel);
     }
     
     /**
@@ -904,35 +991,35 @@ class QCC_Debug_Logger {
      * Convenience methods for different log levels
      */
     public function emergency($message, $context = array()) {
-        $this->log('emergency', $message, $context);
+        self::log('emergency', $message, $context);
     }
-    
+
     public function alert($message, $context = array()) {
-        $this->log('alert', $message, $context);
+        self::log('alert', $message, $context);
     }
-    
+
     public function critical($message, $context = array()) {
-        $this->log('critical', $message, $context);
+        self::log('critical', $message, $context);
     }
-    
+
     public function error($message, $context = array()) {
-        $this->log('error', $message, $context);
+        self::log('error', $message, $context);
     }
-    
+
     public function warning($message, $context = array()) {
-        $this->log('warning', $message, $context);
+        self::log('warning', $message, $context);
     }
-    
+
     public function notice($message, $context = array()) {
-        $this->log('notice', $message, $context);
+        self::log('notice', $message, $context);
     }
-    
+
     public function info($message, $context = array()) {
-        $this->log('info', $message, $context);
+        self::log('info', $message, $context);
     }
-    
+
     public function debug($message, $context = array()) {
-        $this->log('debug', $message, $context);
+        self::log('debug', $message, $context);
     }
     
     /**
@@ -1574,7 +1661,7 @@ define('QCC_DEBUG', true);</code></pre>
         if (array_key_exists($method, self::LOG_LEVELS)) {
             $message = $arguments[0] ?? '';
             $context = $arguments[1] ?? array();
-            $this->log($method, $message, $context);
+            self::log($method, $message, $context);
         }
     }
     
