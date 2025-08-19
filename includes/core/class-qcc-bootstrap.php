@@ -1,8 +1,8 @@
 <?php
 /**
- * QCC Bootstrap - Neue Hauptarchitektur
+ * QCC Bootstrap - Neue Hauptarchitektur (KORRIGIERT)
  * 
- * SPEICHERN ALS: wp-content/plugins/quality-cost-calculator/includes/core/class-qcc-bootstrap.php
+ * KOMPLETT ERSETZEN: wp-content/plugins/quality-cost-calculator/includes/core/class-qcc-bootstrap.php
  * 
  * @package QualityCostCalculator
  * @since 2.0.0
@@ -251,6 +251,278 @@ class QCC_Bootstrap {
                     'error' => __('Calculation failed', QCC_TEXT_DOMAIN)
                 )
             ));
+        }
+    }
+    
+    /**
+     * Enqueue admin assets
+     */
+    public function enqueue_admin_assets($hook) {
+        // Only load on plugin pages
+        if (strpos($hook, 'quality-cost-calculator') === false) {
+            return;
+        }
+        
+        // Admin CSS
+        $admin_css = QCC_PLUGIN_URL . 'assets/admin-style.css';
+        if (file_exists(QCC_PLUGIN_PATH . 'assets/admin-style.css')) {
+            wp_enqueue_style('qcc-admin', $admin_css, array(), QCC_PLUGIN_VERSION);
+        }
+        
+        // Admin JS
+        $admin_js = QCC_PLUGIN_URL . 'assets/admin-script.js';
+        if (file_exists(QCC_PLUGIN_PATH . 'assets/admin-script.js')) {
+            wp_enqueue_script('qcc-admin', $admin_js, array('jquery'), QCC_PLUGIN_VERSION, true);
+        }
+    }
+    
+    /**
+     * Register admin menu
+     */
+    public function register_admin_menu() {
+        // Add main menu page
+        add_menu_page(
+            __('Quality Cost Calculator', QCC_TEXT_DOMAIN),     // Page title
+            __('QCC Settings', QCC_TEXT_DOMAIN),                // Menu title
+            'manage_options',                                    // Capability
+            'quality-cost-calculator',                          // Menu slug
+            array($this, 'render_admin_page'),                  // Callback function
+            'dashicons-chart-line',                             // Icon
+            80                                                  // Position
+        );
+        
+        // Add submenu pages
+        add_submenu_page(
+            'quality-cost-calculator',                          // Parent slug
+            __('Calculator Settings', QCC_TEXT_DOMAIN),         // Page title
+            __('Settings', QCC_TEXT_DOMAIN),                    // Menu title
+            'manage_options',                                   // Capability
+            'quality-cost-calculator',                          // Menu slug (same as parent for main page)
+            array($this, 'render_admin_page')                   // Callback function
+        );
+        
+        add_submenu_page(
+            'quality-cost-calculator',                          // Parent slug
+            __('Calculator Help', QCC_TEXT_DOMAIN),             // Page title
+            __('Help', QCC_TEXT_DOMAIN),                        // Menu title
+            'manage_options',                                   // Capability
+            'quality-cost-calculator-help',                     // Menu slug
+            array($this, 'render_help_page')                    // Callback function
+        );
+    }
+    
+    /**
+     * Render admin page
+     */
+    public function render_admin_page() {
+        // Check user permissions
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have sufficient permissions to access this page.', QCC_TEXT_DOMAIN));
+        }
+        
+        // Handle form submission
+        if (isset($_POST['submit']) && check_admin_referer('qcc_settings_nonce')) {
+            $this->save_admin_settings();
+            echo '<div class="notice notice-success"><p>' . __('Settings saved successfully!', QCC_TEXT_DOMAIN) . '</p></div>';
+        }
+        
+        // Get current settings
+        $settings = get_option('qcc_settings', array(
+            'default_currency' => '€',
+            'default_revenue' => 1000000,
+            'default_quality_basis' => 3,
+            'enable_charts' => true,
+            'enable_export' => true
+        ));
+        
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Quality Cost Calculator Settings', QCC_TEXT_DOMAIN); ?></h1>
+            
+            <form method="post" action="">
+                <?php wp_nonce_field('qcc_settings_nonce'); ?>
+                
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="default_currency"><?php _e('Default Currency', QCC_TEXT_DOMAIN); ?></label>
+                        </th>
+                        <td>
+                            <input type="text" id="default_currency" name="default_currency" 
+                                   value="<?php echo esc_attr($settings['default_currency']); ?>" 
+                                   class="small-text" />
+                            <p class="description"><?php _e('Currency symbol to display in calculations', QCC_TEXT_DOMAIN); ?></p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="default_revenue"><?php _e('Default Revenue', QCC_TEXT_DOMAIN); ?></label>
+                        </th>
+                        <td>
+                            <input type="number" id="default_revenue" name="default_revenue" 
+                                   value="<?php echo esc_attr($settings['default_revenue']); ?>" 
+                                   class="regular-text" />
+                            <p class="description"><?php _e('Default annual revenue value', QCC_TEXT_DOMAIN); ?></p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="default_quality_basis"><?php _e('Default Quality Basis', QCC_TEXT_DOMAIN); ?></label>
+                        </th>
+                        <td>
+                            <input type="number" id="default_quality_basis" name="default_quality_basis" 
+                                   value="<?php echo esc_attr($settings['default_quality_basis']); ?>" 
+                                   step="0.1" min="0" max="100" class="small-text" />
+                            <span>%</span>
+                            <p class="description"><?php _e('Default quality cost basis as percentage of revenue', QCC_TEXT_DOMAIN); ?></p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><?php _e('Features', QCC_TEXT_DOMAIN); ?></th>
+                        <td>
+                            <fieldset>
+                                <label>
+                                    <input type="checkbox" name="enable_charts" value="1" 
+                                           <?php checked($settings['enable_charts'], true); ?> />
+                                    <?php _e('Enable Charts', QCC_TEXT_DOMAIN); ?>
+                                </label><br>
+                                
+                                <label>
+                                    <input type="checkbox" name="enable_export" value="1" 
+                                           <?php checked($settings['enable_export'], true); ?> />
+                                    <?php _e('Enable Export Functions', QCC_TEXT_DOMAIN); ?>
+                                </label>
+                            </fieldset>
+                        </td>
+                    </tr>
+                </table>
+                
+                <?php submit_button(); ?>
+            </form>
+            
+            <hr>
+            
+            <h2><?php _e('Plugin Status', QCC_TEXT_DOMAIN); ?></h2>
+            <div class="qcc-status-info">
+                <?php $this->render_plugin_status(); ?>
+            </div>
+            
+            <?php if (QCC_DEBUG): ?>
+                <hr>
+                <h2><?php _e('Debug Information', QCC_TEXT_DOMAIN); ?></h2>
+                <div class="qcc-debug-info">
+                    <?php $this->render_debug_info(); ?>
+                </div>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+    
+    /**
+     * Render help page
+     */
+    public function render_help_page() {
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Quality Cost Calculator Help', QCC_TEXT_DOMAIN); ?></h1>
+            
+            <div class="qcc-help-content">
+                <h2><?php _e('How to Use', QCC_TEXT_DOMAIN); ?></h2>
+                <p><?php _e('Add the calculator to any page or post using one of these shortcodes:', QCC_TEXT_DOMAIN); ?></p>
+                
+                <div class="qcc-shortcode-examples">
+                    <h3><?php _e('Shortcode Examples', QCC_TEXT_DOMAIN); ?></h3>
+                    <ul>
+                        <li><code>[quality_cost_calculator]</code> - <?php _e('Basic calculator', QCC_TEXT_DOMAIN); ?></li>
+                        <li><code>[quality_cost_calculator currency="$" default_revenue="2000000"]</code> - <?php _e('With custom settings', QCC_TEXT_DOMAIN); ?></li>
+                        <li><code>[qcc_calculator]</code> - <?php _e('Short version', QCC_TEXT_DOMAIN); ?></li>
+                    </ul>
+                </div>
+                
+                <h2><?php _e('Understanding Quality Costs', QCC_TEXT_DOMAIN); ?></h2>
+                <div class="qcc-help-sections">
+                    <div class="qcc-help-section">
+                        <h3><?php _e('COGQ - Cost of Good Quality', QCC_TEXT_DOMAIN); ?></h3>
+                        <p><?php _e('Includes Prevention and Appraisal costs - investments to prevent defects.', QCC_TEXT_DOMAIN); ?></p>
+                    </div>
+                    
+                    <div class="qcc-help-section">
+                        <h3><?php _e('COPQ - Cost of Poor Quality', QCC_TEXT_DOMAIN); ?></h3>
+                        <p><?php _e('Includes Internal and External defect costs - costs resulting from failures.', QCC_TEXT_DOMAIN); ?></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+    
+    /**
+     * Save admin settings
+     */
+    private function save_admin_settings() {
+        $settings = array(
+            'default_currency' => sanitize_text_field($_POST['default_currency']),
+            'default_revenue' => intval($_POST['default_revenue']),
+            'default_quality_basis' => floatval($_POST['default_quality_basis']),
+            'enable_charts' => isset($_POST['enable_charts']),
+            'enable_export' => isset($_POST['enable_export'])
+        );
+        
+        update_option('qcc_settings', $settings);
+    }
+    
+    /**
+     * Render plugin status
+     */
+    private function render_plugin_status() {
+        $bootstrap_status = $this->is_initialized() ? '✅ Active' : '❌ Failed';
+        $container_status = $this->container ? '✅ Loaded' : '❌ Missing';
+        $services_count = $this->container ? count($this->container->get_service_names()) : 0;
+        
+        echo '<table class="widefat fixed striped">';
+        echo '<thead><tr><th>Component</th><th>Status</th><th>Details</th></tr></thead>';
+        echo '<tbody>';
+        echo '<tr><td>Bootstrap System</td><td>' . $bootstrap_status . '</td><td>Main plugin initialization</td></tr>';
+        echo '<tr><td>Service Container</td><td>' . $container_status . '</td><td>' . $services_count . ' services registered</td></tr>';
+        echo '<tr><td>Plugin Version</td><td>✅ ' . QCC_PLUGIN_VERSION . '</td><td>Current version</td></tr>';
+        echo '<tr><td>WordPress Version</td><td>✅ ' . get_bloginfo('version') . '</td><td>Compatible</td></tr>';
+        echo '<tr><td>PHP Version</td><td>✅ ' . PHP_VERSION . '</td><td>Compatible</td></tr>';
+        echo '</tbody>';
+        echo '</table>';
+    }
+    
+    /**
+     * Render debug information
+     */
+    private function render_debug_info() {
+        if (!QCC_DEBUG) {
+            return;
+        }
+        
+        // Autoloader stats
+        if (class_exists('QCC_Autoloader')) {
+            $autoloader_stats = QCC_Autoloader::get_stats();
+            echo '<h3>Autoloader Statistics</h3>';
+            echo '<ul>';
+            echo '<li>Registered Classes: ' . $autoloader_stats['registered_classes'] . '</li>';
+            echo '<li>Loaded Classes: ' . $autoloader_stats['loaded_classes'] . '</li>';
+            echo '<li>Failed Loads: ' . $autoloader_stats['failed_loads'] . '</li>';
+            echo '<li>Load Percentage: ' . $autoloader_stats['load_percentage'] . '%</li>';
+            echo '</ul>';
+        }
+        
+        // Container stats
+        if ($this->container) {
+            $container_stats = $this->container->get_stats();
+            echo '<h3>Service Container</h3>';
+            echo '<ul>';
+            echo '<li>Registered Services: ' . $container_stats['registered_services'] . '</li>';
+            echo '<li>Instantiated Services: ' . $container_stats['instantiated_services'] . '</li>';
+            echo '<li>Services: ' . implode(', ', $container_stats['service_names']) . '</li>';
+            echo '</ul>';
         }
     }
     
