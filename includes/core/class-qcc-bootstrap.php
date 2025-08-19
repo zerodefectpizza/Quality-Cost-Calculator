@@ -257,7 +257,8 @@ class QCC_Bootstrap {
         }
         
         // Fallback to plugin languages directory
-        $plugin_lang_dir = QCC_PLUGIN_DIR . '/languages/';
+        // Use plugin basename to build relative languages path for translations
+        $plugin_lang_dir = dirname(QCC_PLUGIN_BASENAME) . '/languages/';
         load_plugin_textdomain($domain, false, $plugin_lang_dir);
     }
     
