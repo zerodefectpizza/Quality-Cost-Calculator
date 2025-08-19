@@ -34,6 +34,6 @@ class QCC_Plugin {
     }
     
     public function init() {
-        QCC_Bootstrap::init();
+        QCC_Bootstrap::initialize();
     }
 }
