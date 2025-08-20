@@ -68,6 +68,14 @@ function qcc_init_plugin() {
         // Initialize autoloader
         QCC_Autoloader::init();
         
+        // 🚀 NEUE ERGÄNZUNG: Service Container Setup aktivieren
+        if (class_exists('QCC_Service_Container_Setup')) {
+            QCC_Service_Container_Setup::init();
+            if (QCC_DEBUG) {
+                error_log('QCC: Component System activated successfully');
+            }
+        }
+        
         // Load bootstrap class
         if (class_exists('QCC_Bootstrap')) {
             QCC_Bootstrap::initialize();
