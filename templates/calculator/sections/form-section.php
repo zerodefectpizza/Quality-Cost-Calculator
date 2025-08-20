@@ -25,10 +25,254 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Section-Daten vorbereiten
-$section_id = $data['id'] ?? $helpers['generate_section_id']($data);
-$title = $data['title'] ?? $translator->get('input_parameters');
-$description = $data['description'] ?? $translator->get('enter_company_data');
+// =============================================================================
+// DEBUG CODE - TRANSLATION SERVICE DIAGNOSE
+// =============================================================================
+
+if (WP_DEBUG || (defined('QCC_DEBUG') && QCC_DEBUG)) {
+    echo '<div style="background: #f0f0f0; border: 2px solid #dc3545; padding: 15px; margin: 15px 0; font-family: monospace; font-size: 12px; border-radius: 8px;">';
+    echo '<h4 style="color: #dc3545; margin: 0 0 10px 0;">🔍 QCC Translation Debug:</h4>';
+    
+    // 1. Prüfe ob $translator Variable verfügbar ist
+    echo '<strong>1. Translator Variable:</strong><br>';
+    if (isset($translator)) {
+        echo '✅ $translator ist verfügbar: ' . get_class($translator) . '<br>';
+        echo '   Current Language: ' . $translator->get_current_language() . '<br>';
+        
+        // Test einige Translation Keys
+        $test_keys = array('cogq_title', 'copq_title', 'prevention_costs', 'appraisal_costs', 'basic_parameters');
+        foreach ($test_keys as $key) {
+            $value = $translator->get($key);
+            echo '   Key "' . $key . '": "' . $value . '"<br>';
+        }
+    } else {
+        echo '❌ $translator ist NICHT verfügbar<br>';
+    }
+    
+    // 2. Prüfe Service Container
+    echo '<br><strong>2. Service Container:</strong><br>';
+    if (class_exists('QCC_Service_Container_Setup')) {
+        echo '✅ Service Container Setup verfügbar<br>';
+        try {
+            $container = QCC_Service_Container_Setup::get_container();
+            if ($container) {
+                echo '✅ Container ist initialisiert<br>';
+                
+                // Prüfe ob Translator Service verfügbar ist
+                if (method_exists($container, 'get')) {
+                    try {
+                        $service_translator = $container->get('translator');
+                        echo '✅ Translator Service verfügbar: ' . get_class($service_translator) . '<br>';
+                        echo '   Service Language: ' . $service_translator->get_current_language() . '<br>';
+                    } catch (Exception $e) {
+                        echo '❌ Translator Service fehlt: ' . $e->getMessage() . '<br>';
+                    }
+                } else {
+                    echo '❌ Container->get() Methode nicht verfügbar<br>';
+                }
+            } else {
+                echo '❌ Container ist NULL<br>';
+            }
+        } catch (Exception $e) {
+            echo '❌ Container Error: ' . $e->getMessage() . '<br>';
+        }
+    } else {
+        echo '❌ Service Container Setup nicht verfügbar<br>';
+    }
+    
+    // 3. Prüfe Translation Classes
+    echo '<br><strong>3. Translation Classes:</strong><br>';
+    $translation_classes = array(
+        'QCC_Translator',
+        'QCC_German_Translations', 
+        'QCC_English_Translations'
+    );
+    
+    foreach ($translation_classes as $class) {
+        if (class_exists($class)) {
+            echo '✅ ' . $class . ' ist verfügbar<br>';
+        } else {
+            echo '❌ ' . $class . ' ist NICHT verfügbar<br>';
+        }
+    }
+    
+    // 4. Fallback Test - Direct Translation
+    echo '<br><strong>4. Direct Translation Test:</strong><br>';
+    if (class_exists('QCC_German_Translations')) {
+        $german = new QCC_German_Translations();
+        $translations = $german->get_translations();
+        echo '✅ German Translations geladen: ' . count($translations) . ' Keys<br>';
+        
+        // Test cogq_title Key
+        if (isset($translations['cogq_title'])) {
+            echo '✅ cogq_title gefunden: "' . $translations['cogq_title'] . '"<br>';
+        } else {
+            echo '❌ cogq_title NICHT gefunden in German Translations<br>';
+            // Suche ähnliche Keys
+            $similar = array_filter(array_keys($translations), function($k) {
+                return strpos($k, 'cogq') !== false || strpos($k, 'prevention') !== false;
+            });
+            echo '   Ähnliche Keys: ' . implode(', ', array_slice($similar, 0, 5)) . '<br>';
+        }
+    }
+    
+    // 5. Template Variables Check
+    echo '<br><strong>5. Template Variables:</strong><br>';
+    $template_vars = array('data', 'attributes', 'helpers', 'translator', 'template_manager', 'debug');
+    foreach ($template_vars as $var) {
+        if (isset($$var)) {
+            echo '✅ $' . $var . ' ist verfügbar (' . gettype($$var) . ')<br>';
+        } else {
+            echo '❌ $' . $var . ' ist NICHT verfügbar<br>';
+        }
+    }
+    
+    echo '</div>';
+}
+
+// =============================================================================
+// QUICK FIX FUNCTION - SOFORT VERWENDEN
+// =============================================================================
+
+if (!function_exists('qcc_debug_translate')) {
+    function qcc_debug_translate($key, $language = 'de') {
+        // 1. Versuche Service Container
+        if (class_exists('QCC_Service_Container_Setup')) {
+            try {
+                $container = QCC_Service_Container_Setup::get_container();
+                if ($container && method_exists($container, 'get')) {
+                    $translator = $container->get('translator');
+                    return $translator->get($key);
+                }
+            } catch (Exception $e) {
+                // Ignoriere und gehe zu Fallback
+            }
+        }
+        
+        // 2. Versuche direkte Translation Class
+        if ($language === 'de' && class_exists('QCC_German_Translations')) {
+            $german = new QCC_German_Translations();
+            $translations = $german->get_translations();
+            if (isset($translations[$key])) {
+                return $translations[$key];
+            }
+        }
+        
+        if (class_exists('QCC_English_Translations')) {
+            $english = new QCC_English_Translations();
+            $translations = $english->get_translations();
+            if (isset($translations[$key])) {
+                return $translations[$key];
+            }
+        }
+        
+        // 3. Hard-coded Fallback für wichtigste Keys
+        $fallbacks = array(
+            'de' => array(
+                'input_parameters' => 'Eingabeparameter',
+                'enter_company_data' => 'Geben Sie Ihre Unternehmensdaten ein',
+                'basic_parameters' => 'Grundparameter',
+                'revenue_and_quality_cost' => 'Umsatz und Qualitätskosten',
+                'cost_of_good_quality' => 'Kosten guter Qualität',
+                'prevention_and_appraisal_costs' => 'Präventions- und Prüfkosten',
+                'cost_of_poor_quality' => 'Kosten schlechter Qualität',
+                'internal_and_external_defects' => 'Interne und externe Fehler',
+                'opportunity_costs' => 'Opportunitätskosten',
+                'additional_business_impact' => 'Zusätzliche Geschäftsauswirkungen',
+                'cogq_title' => 'Kosten guter Qualität (CoGQ)',
+                'copq_title' => 'Kosten schlechter Qualität (CoPQ)',
+                'prevention_costs' => 'Präventionskosten',
+                'appraisal_costs' => 'Prüfkosten',
+                'internal_defect_costs' => 'Interne Fehlerkosten',
+                'external_defect_costs' => 'Externe Fehlerkosten',
+                'revenue' => 'Umsatz',
+                'quality_cost_percentage' => 'Qualitätskostenprozentsatz',
+                'total_company_revenue' => 'Gesamtumsatz des Unternehmens',
+                'percentage_of_revenue_for_quality' => 'Prozentsatz des Umsatzes für Qualität',
+                'prevention_costs_description' => 'Kosten zur Fehlervermeidung',
+                'appraisal_costs_description' => 'Kosten zur Qualitätsprüfung',
+                'internal_defect_costs_description' => 'Interne Fehlerkosten',
+                'external_defect_costs_description' => 'Externe Fehlerkosten',
+                'lost_sales' => 'Verlorene Verkäufe',
+                'customer_churn' => 'Kundenabwanderung',
+                'market_share_loss' => 'Marktanteilsverlust',
+                'productivity_loss' => 'Produktivitätsverlust',
+                'calculator_inputs' => 'Rechner-Eingaben',
+                'optional' => 'Optional',
+                'total' => 'Gesamt',
+                'reset_form' => 'Formular zurücksetzen',
+                'save_form' => 'Formular speichern',
+                'reset' => 'Zurücksetzen',
+                'save' => 'Speichern',
+                'auto_calculation_enabled' => 'Automatische Berechnung aktiviert',
+                'calculate' => 'Berechnen',
+                'billions' => 'Milliarden',
+                'millions' => 'Millionen'
+            ),
+            'en' => array(
+                'input_parameters' => 'Input Parameters',
+                'enter_company_data' => 'Enter your company data',
+                'basic_parameters' => 'Basic Parameters',
+                'revenue_and_quality_cost' => 'Revenue and Quality Cost',
+                'cost_of_good_quality' => 'Cost of Good Quality',
+                'prevention_and_appraisal_costs' => 'Prevention and Appraisal Costs',
+                'cost_of_poor_quality' => 'Cost of Poor Quality',
+                'internal_and_external_defects' => 'Internal and External Defects',
+                'opportunity_costs' => 'Opportunity Costs',
+                'additional_business_impact' => 'Additional Business Impact',
+                'cogq_title' => 'Cost of Good Quality (CoGQ)',
+                'copq_title' => 'Cost of Poor Quality (CoPQ)',
+                'prevention_costs' => 'Prevention Costs',
+                'appraisal_costs' => 'Appraisal Costs',
+                'internal_defect_costs' => 'Internal Defect Costs',
+                'external_defect_costs' => 'External Defect Costs',
+                'revenue' => 'Revenue',
+                'quality_cost_percentage' => 'Quality Cost Percentage',
+                'total_company_revenue' => 'Total Company Revenue',
+                'percentage_of_revenue_for_quality' => 'Percentage of Revenue for Quality',
+                'prevention_costs_description' => 'Costs to prevent defects',
+                'appraisal_costs_description' => 'Costs to evaluate quality',
+                'internal_defect_costs_description' => 'Internal defect costs',
+                'external_defect_costs_description' => 'External defect costs',
+                'lost_sales' => 'Lost Sales',
+                'customer_churn' => 'Customer Churn',
+                'market_share_loss' => 'Market Share Loss',
+                'productivity_loss' => 'Productivity Loss',
+                'calculator_inputs' => 'Calculator Inputs',
+                'optional' => 'Optional',
+                'total' => 'Total',
+                'reset_form' => 'Reset Form',
+                'save_form' => 'Save Form',
+                'reset' => 'Reset',
+                'save' => 'Save',
+                'auto_calculation_enabled' => 'Auto calculation enabled',
+                'calculate' => 'Calculate',
+                'billions' => 'Billions',
+                'millions' => 'Millions'
+            )
+        );
+        
+        if (isset($fallbacks[$language][$key])) {
+            return $fallbacks[$language][$key];
+        }
+        
+        if (isset($fallbacks['en'][$key])) {
+            return $fallbacks['en'][$key];
+        }
+        
+        // 4. Last Resort: Format key nicely
+        return ucwords(str_replace('_', ' ', $key));
+    }
+}
+
+// =============================================================================
+// TEMPLATE MAIN CODE - MIT QUICK FIX
+// =============================================================================
+
+// Section-Daten vorbereiten (MIT QUICK FIX)
+$section_id = $data['id'] ?? ($helpers['generate_section_id']($data) ?? 'qcc-form-section');
+$title = $data['title'] ?? qcc_debug_translate('input_parameters', 'de');
+$description = $data['description'] ?? qcc_debug_translate('enter_company_data', 'de');
 $layout = $data['layout'] ?? 'vertical'; // vertical, horizontal, tabs
 $validation_mode = $data['validation_mode'] ?? 'live'; // live, submit, manual
 
@@ -36,7 +280,14 @@ $validation_mode = $data['validation_mode'] ?? 'live'; // live, submit, manual
 $currency = $data['currency'] ?? 'EUR';
 $unit = $data['unit'] ?? 'billions';
 $unit_multiplier = ($unit === 'millions') ? 1000000 : 1000000000;
-$currency_symbol = $helpers['get_currency_symbol']($currency);
+
+// Helper für Currency Symbol
+if (isset($helpers['get_currency_symbol'])) {
+    $currency_symbol = $helpers['get_currency_symbol']($currency);
+} else {
+    $currency_symbols = array('EUR' => '€', 'USD' => '$', 'GBP' => '£', 'JPY' => '¥');
+    $currency_symbol = $currency_symbols[$currency] ?? $currency;
+}
 
 // Standard-Werte
 $default_values = array_merge(array(
@@ -52,59 +303,59 @@ $default_values = array_merge(array(
     'productivity_loss' => 3
 ), $data['default_values'] ?? array());
 
-// Form-Sections definieren
+// Form-Sections definieren (MIT QUICK FIX)
 $form_sections = $data['sections'] ?? array(
     'basic' => array(
-        'title' => $translator->get('basic_parameters'),
-        'description' => $translator->get('revenue_and_quality_cost'),
+        'title' => qcc_debug_translate('basic_parameters', 'de'),
+        'description' => qcc_debug_translate('revenue_and_quality_cost', 'de'),
         'fields' => array('revenue', 'quality_percentage'),
-        'icon' => 'calculator',
+        'icon' => '🧮',
         'collapsible' => false
     ),
     'cogq' => array(
-        'title' => $translator->get('cost_of_good_quality'),
-        'description' => $translator->get('prevention_and_appraisal_costs'),
+        'title' => qcc_debug_translate('cost_of_good_quality', 'de'),
+        'description' => qcc_debug_translate('prevention_and_appraisal_costs', 'de'),
         'fields' => array('prevention', 'appraisal'),
-        'icon' => 'shield-check',
+        'icon' => '🛡️',
         'collapsible' => true,
         'color' => 'green'
     ),
     'copq' => array(
-        'title' => $translator->get('cost_of_poor_quality'),
-        'description' => $translator->get('internal_and_external_defects'),
+        'title' => qcc_debug_translate('cost_of_poor_quality', 'de'),
+        'description' => qcc_debug_translate('internal_and_external_defects', 'de'),
         'fields' => array('internal_defect', 'external_defect'),
-        'icon' => 'alert-triangle',
+        'icon' => '⚠️',
         'collapsible' => true,
         'color' => 'red'
     ),
     'opportunity' => array(
-        'title' => $translator->get('opportunity_costs'),
-        'description' => $translator->get('additional_business_impact'),
+        'title' => qcc_debug_translate('opportunity_costs', 'de'),
+        'description' => qcc_debug_translate('additional_business_impact', 'de'),
         'fields' => array('lost_sales', 'customer_churn', 'market_share_loss', 'productivity_loss'),
-        'icon' => 'trending-up',
+        'icon' => '📈',
         'collapsible' => true,
         'color' => 'blue',
         'optional' => true
     )
 );
 
-// Field-Definitionen
+// Field-Definitionen (MIT QUICK FIX)
 $field_definitions = array(
     'revenue' => array(
         'type' => 'currency',
-        'label' => $translator->get('revenue'),
+        'label' => qcc_debug_translate('revenue', 'de'),
         'placeholder' => '140',
-        'help' => $translator->get('total_company_revenue'),
+        'help' => qcc_debug_translate('total_company_revenue', 'de'),
         'required' => true,
         'min' => 0,
         'step' => 0.01,
-        'unit_suffix' => $translator->get($unit)
+        'unit_suffix' => qcc_debug_translate($unit, 'de')
     ),
     'quality_percentage' => array(
         'type' => 'percentage',
-        'label' => $translator->get('quality_cost_percentage'),
+        'label' => qcc_debug_translate('quality_cost_percentage', 'de'),
         'placeholder' => '6',
-        'help' => $translator->get('percentage_of_revenue_for_quality'),
+        'help' => qcc_debug_translate('percentage_of_revenue_for_quality', 'de'),
         'required' => true,
         'min' => 0,
         'max' => 100,
@@ -112,9 +363,9 @@ $field_definitions = array(
     ),
     'prevention' => array(
         'type' => 'percentage',
-        'label' => $translator->get('prevention_costs'),
+        'label' => qcc_debug_translate('prevention_costs', 'de'),
         'placeholder' => '10',
-        'help' => $translator->get('prevention_costs_description'),
+        'help' => qcc_debug_translate('prevention_costs_description', 'de'),
         'required' => true,
         'min' => 0,
         'max' => 100,
@@ -123,9 +374,9 @@ $field_definitions = array(
     ),
     'appraisal' => array(
         'type' => 'percentage',
-        'label' => $translator->get('appraisal_costs'),
+        'label' => qcc_debug_translate('appraisal_costs', 'de'),
         'placeholder' => '20',
-        'help' => $translator->get('appraisal_costs_description'),
+        'help' => qcc_debug_translate('appraisal_costs_description', 'de'),
         'required' => true,
         'min' => 0,
         'max' => 100,
@@ -134,9 +385,9 @@ $field_definitions = array(
     ),
     'internal_defect' => array(
         'type' => 'percentage',
-        'label' => $translator->get('internal_defect_costs'),
+        'label' => qcc_debug_translate('internal_defect_costs', 'de'),
         'placeholder' => '30',
-        'help' => $translator->get('internal_defect_costs_description'),
+        'help' => qcc_debug_translate('internal_defect_costs_description', 'de'),
         'required' => true,
         'min' => 0,
         'max' => 100,
@@ -145,9 +396,9 @@ $field_definitions = array(
     ),
     'external_defect' => array(
         'type' => 'percentage',
-        'label' => $translator->get('external_defect_costs'),
+        'label' => qcc_debug_translate('external_defect_costs', 'de'),
         'placeholder' => '40',
-        'help' => $translator->get('external_defect_costs_description'),
+        'help' => qcc_debug_translate('external_defect_costs_description', 'de'),
         'required' => true,
         'min' => 0,
         'max' => 100,
@@ -156,9 +407,9 @@ $field_definitions = array(
     ),
     'lost_sales' => array(
         'type' => 'percentage',
-        'label' => $translator->get('lost_sales'),
+        'label' => qcc_debug_translate('lost_sales', 'de'),
         'placeholder' => '5',
-        'help' => $translator->get('lost_sales_description'),
+        'help' => qcc_debug_translate('lost_sales_description', 'de'),
         'required' => false,
         'min' => 0,
         'max' => 100,
@@ -166,9 +417,9 @@ $field_definitions = array(
     ),
     'customer_churn' => array(
         'type' => 'percentage',
-        'label' => $translator->get('customer_churn'),
+        'label' => qcc_debug_translate('customer_churn', 'de'),
         'placeholder' => '2',
-        'help' => $translator->get('customer_churn_description'),
+        'help' => qcc_debug_translate('customer_churn_description', 'de'),
         'required' => false,
         'min' => 0,
         'max' => 100,
@@ -176,9 +427,9 @@ $field_definitions = array(
     ),
     'market_share_loss' => array(
         'type' => 'percentage',
-        'label' => $translator->get('market_share_loss'),
+        'label' => qcc_debug_translate('market_share_loss', 'de'),
         'placeholder' => '1',
-        'help' => $translator->get('market_share_loss_description'),
+        'help' => qcc_debug_translate('market_share_loss_description', 'de'),
         'required' => false,
         'min' => 0,
         'max' => 100,
@@ -186,9 +437,9 @@ $field_definitions = array(
     ),
     'productivity_loss' => array(
         'type' => 'percentage',
-        'label' => $translator->get('productivity_loss'),
+        'label' => qcc_debug_translate('productivity_loss', 'de'),
         'placeholder' => '3',
-        'help' => $translator->get('productivity_loss_description'),
+        'help' => qcc_debug_translate('productivity_loss_description', 'de'),
         'required' => false,
         'min' => 0,
         'max' => 100,
@@ -197,31 +448,42 @@ $field_definitions = array(
 );
 
 // CSS-Klassen für Form-Section
-$form_classes = $helpers['build_css_classes'](
-    array('qcc-form-section'),
-    array(
-        'qcc-form-section--' . $layout => true,
-        'qcc-form-section--live-validation' => $validation_mode === 'live',
-        'qcc-form-section--' . ($data['style'] ?? 'default') => true
-    )
-);
+if (isset($helpers['build_css_classes'])) {
+    $form_classes = $helpers['build_css_classes'](
+        array('qcc-form-section'),
+        array(
+            'qcc-form-section--' . $layout => true,
+            'qcc-form-section--live-validation' => $validation_mode === 'live',
+            'qcc-form-section--' . ($data['style'] ?? 'default') => true
+        )
+    );
+} else {
+    $form_classes = 'qcc-form-section qcc-form-section--' . $layout;
+}
+
+// Helper Escape Function
+if (isset($helpers['escape'])) {
+    $escape_func = $helpers['escape'];
+} else {
+    $escape_func = 'esc_html';
+}
 ?>
 
 <!-- QCC Form Section Start -->
 <section id="<?php echo esc_attr($section_id); ?>" 
          class="<?php echo esc_attr($form_classes); ?>"
          role="region"
-         aria-label="<?php echo esc_attr($translator->get('calculator_inputs')); ?>">
+         aria-label="<?php echo esc_attr(qcc_debug_translate('calculator_inputs', 'de')); ?>">
 
     <!-- Section Header -->
     <div class="qcc-form-header">
         <h2 class="qcc-form-title">
-            <?php echo $helpers['escape']($title); ?>
+            <?php echo $escape_func($title); ?>
         </h2>
         
         <?php if (!empty($description)): ?>
         <p class="qcc-form-description">
-            <?php echo $helpers['escape']($description); ?>
+            <?php echo $escape_func($description); ?>
         </p>
         <?php endif; ?>
 
@@ -253,16 +515,16 @@ $form_classes = $helpers['build_css_classes'](
                 
                 <?php if (!empty($section_config['icon'])): ?>
                 <span class="qcc-tab-icon" aria-hidden="true">
-                    <?php echo $helpers['escape']($section_config['icon']); ?>
+                    <?php echo $escape_func($section_config['icon']); ?>
                 </span>
                 <?php endif; ?>
                 
                 <span class="qcc-tab-text">
-                    <?php echo $helpers['escape']($section_config['title']); ?>
+                    <?php echo $escape_func($section_config['title']); ?>
                 </span>
                 
                 <?php if (!empty($section_config['optional'])): ?>
-                <span class="qcc-tab-optional">(<?php echo $helpers['escape']($translator->get('optional')); ?>)</span>
+                <span class="qcc-tab-optional">(<?php echo $escape_func(qcc_debug_translate('optional', 'de')); ?>)</span>
                 <?php endif; ?>
             </button>
             <?php endforeach; ?>
@@ -291,15 +553,15 @@ $form_classes = $helpers['build_css_classes'](
                     <div class="qcc-group-title-row">
                         <?php if (!empty($section_config['icon'])): ?>
                         <span class="qcc-group-icon qcc-group-icon--<?php echo esc_attr($section_config['color'] ?? 'default'); ?>" aria-hidden="true">
-                            <?php echo $helpers['escape']($section_config['icon']); ?>
+                            <?php echo $escape_func($section_config['icon']); ?>
                         </span>
                         <?php endif; ?>
                         
                         <h3 class="qcc-group-title">
-                            <?php echo $helpers['escape']($section_config['title']); ?>
+                            <?php echo $escape_func($section_config['title']); ?>
                             
                             <?php if (!empty($section_config['optional'])): ?>
-                            <span class="qcc-group-optional">(<?php echo $helpers['escape']($translator->get('optional')); ?>)</span>
+                            <span class="qcc-group-optional">(<?php echo $escape_func(qcc_debug_translate('optional', 'de')); ?>)</span>
                             <?php endif; ?>
                         </h3>
                         
@@ -310,7 +572,7 @@ $form_classes = $helpers['build_css_classes'](
                     
                     <?php if (!empty($section_config['description'])): ?>
                     <p class="qcc-group-description">
-                        <?php echo $helpers['escape']($section_config['description']); ?>
+                        <?php echo $escape_func($section_config['description']); ?>
                     </p>
                     <?php endif; ?>
                 </div>
@@ -323,26 +585,59 @@ $form_classes = $helpers['build_css_classes'](
                         <?php 
                         $field_config = $field_definitions[$field_name] ?? array();
                         $field_value = $data['values'][$field_name] ?? $default_values[$field_name] ?? '';
-                        
-                        // Field-spezifische Daten aufbereiten
-                        $field_data = array_merge($field_config, array(
-                            'name' => $field_name,
-                            'id' => 'qcc-' . $field_name,
-                            'value' => $field_value,
-                            'currency_symbol' => $currency_symbol,
-                            'validation_group' => $field_config['group'] ?? null,
-                            'data_attributes' => array(
-                                'data-field' => $field_name,
-                                'data-type' => $field_config['type'],
-                                'data-validation' => $validation_mode
-                            )
-                        ));
                         ?>
                         
-                        <div class="qcc-field-wrapper qcc-field-wrapper--<?php echo esc_attr($field_config['type']); ?>">
-                            <?php
-                            echo $template_manager->render('components/input-field', $field_data);
-                            ?>
+                        <div class="qcc-field-wrapper qcc-field-wrapper--<?php echo esc_attr($field_config['type'] ?? 'text'); ?>">
+                            
+                            <!-- Basic Input Field -->
+                            <div class="qcc-input-field">
+                                <label for="qcc-<?php echo esc_attr($field_name); ?>" class="qcc-field-label">
+                                    <?php echo $escape_func($field_config['label'] ?? ucwords(str_replace('_', ' ', $field_name))); ?>
+                                    <?php if ($field_config['required'] ?? false): ?>
+                                    <span class="qcc-required">*</span>
+                                    <?php endif; ?>
+                                </label>
+                                
+                                <div class="qcc-input-container">
+                                    <?php if ($field_config['type'] === 'currency'): ?>
+                                    <span class="qcc-input-prefix"><?php echo esc_html($currency_symbol); ?></span>
+                                    <?php endif; ?>
+                                    
+                                    <input type="number" 
+                                           id="qcc-<?php echo esc_attr($field_name); ?>"
+                                           name="<?php echo esc_attr($field_name); ?>"
+                                           value="<?php echo esc_attr($field_value); ?>"
+                                           placeholder="<?php echo esc_attr($field_config['placeholder'] ?? ''); ?>"
+                                           min="<?php echo esc_attr($field_config['min'] ?? ''); ?>"
+                                           max="<?php echo esc_attr($field_config['max'] ?? ''); ?>"
+                                           step="<?php echo esc_attr($field_config['step'] ?? '1'); ?>"
+                                           class="qcc-input qcc-input--<?php echo esc_attr($field_config['type'] ?? 'text'); ?>"
+                                           data-field="<?php echo esc_attr($field_name); ?>"
+                                           data-type="<?php echo esc_attr($field_config['type'] ?? 'text'); ?>"
+                                           data-validation="<?php echo esc_attr($validation_mode); ?>"
+                                           <?php if ($field_config['required'] ?? false): ?>required<?php endif; ?>
+                                           onchange="QCC.validateField(this)"
+                                           oninput="QCC.handleFieldInput(this)">
+                                    
+                                    <?php if ($field_config['type'] === 'percentage'): ?>
+                                    <span class="qcc-input-suffix">%</span>
+                                    <?php elseif (isset($field_config['unit_suffix'])): ?>
+                                    <span class="qcc-input-suffix"><?php echo esc_html($field_config['unit_suffix']); ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <?php if (!empty($field_config['help'])): ?>
+                                <div class="qcc-field-help">
+                                    <?php echo $escape_func($field_config['help']); ?>
+                                </div>
+                                <?php endif; ?>
+                                
+                                <div class="qcc-field-validation" style="display: none;">
+                                    <span class="qcc-validation-icon">⚠️</span>
+                                    <span class="qcc-validation-message"></span>
+                                </div>
+                            </div>
+                        
                         </div>
                     <?php endforeach; ?>
 
@@ -354,7 +649,7 @@ $form_classes = $helpers['build_css_classes'](
                          aria-live="polite">
                         <div class="qcc-percentage-total-content">
                             <span class="qcc-percentage-total-label">
-                                <?php echo $helpers['escape']($translator->get('total')); ?>:
+                                <?php echo $escape_func(qcc_debug_translate('total', 'de')); ?>:
                             </span>
                             <span class="qcc-percentage-total-value" id="qcc-total-value-<?php echo esc_attr($section_key); ?>">
                                 0%
@@ -385,9 +680,9 @@ $form_classes = $helpers['build_css_classes'](
                 <button type="button" 
                         class="qcc-button qcc-button--secondary"
                         onclick="QCC.resetForm()"
-                        aria-label="<?php echo esc_attr($translator->get('reset_form')); ?>">
-                    <span class="qcc-button-icon">↺</span>
-                    <span class="qcc-button-text"><?php echo $helpers['escape']($translator->get('reset')); ?></span>
+                        aria-label="<?php echo esc_attr(qcc_debug_translate('reset_form', 'de')); ?>">
+                    <span class="qcc-button-icon">↻</span>
+                    <span class="qcc-button-text"><?php echo $escape_func(qcc_debug_translate('reset', 'de')); ?></span>
                 </button>
                 <?php endif; ?>
                 
@@ -395,9 +690,9 @@ $form_classes = $helpers['build_css_classes'](
                 <button type="button" 
                         class="qcc-button qcc-button--outline"
                         onclick="QCC.saveForm()"
-                        aria-label="<?php echo esc_attr($translator->get('save_form')); ?>">
+                        aria-label="<?php echo esc_attr(qcc_debug_translate('save_form', 'de')); ?>">
                     <span class="qcc-button-icon">💾</span>
-                    <span class="qcc-button-text"><?php echo $helpers['escape']($translator->get('save')); ?></span>
+                    <span class="qcc-button-text"><?php echo $escape_func(qcc_debug_translate('save', 'de')); ?></span>
                 </button>
                 <?php endif; ?>
             </div>
@@ -407,7 +702,7 @@ $form_classes = $helpers['build_css_classes'](
                 <div class="qcc-auto-calculate-info">
                     <span class="qcc-auto-calculate-icon">⚡</span>
                     <span class="qcc-auto-calculate-text">
-                        <?php echo $helpers['escape']($translator->get('auto_calculation_enabled')); ?>
+                        <?php echo $escape_func(qcc_debug_translate('auto_calculation_enabled', 'de')); ?>
                     </span>
                 </div>
                 <?php else: ?>
@@ -415,7 +710,7 @@ $form_classes = $helpers['build_css_classes'](
                         class="qcc-button qcc-button--primary qcc-calculate-button"
                         id="qcc-calculate-button">
                     <span class="qcc-button-icon">🧮</span>
-                    <span class="qcc-button-text"><?php echo $helpers['escape']($translator->get('calculate')); ?></span>
+                    <span class="qcc-button-text"><?php echo $escape_func(qcc_debug_translate('calculate', 'de')); ?></span>
                     <span class="qcc-button-loading" style="display: none;">
                         <span class="qcc-spinner"></span>
                     </span>
@@ -432,39 +727,63 @@ $form_classes = $helpers['build_css_classes'](
 
 <!-- Form Section Styles -->
 <style>
+:root {
+    --qcc-form-bg: #ffffff;
+    --qcc-form-radius: 12px;
+    --qcc-form-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    --qcc-color-border: #e5e7eb;
+    --qcc-form-header-bg: #f9fafb;
+    --qcc-color-heading: #1f2937;
+    --qcc-color-text-muted: #6b7280;
+    --qcc-color-error-bg: #fef2f2;
+    --qcc-color-error-border: #fecaca;
+    --qcc-color-error: #dc2626;
+    --qcc-color-success: #10b981;
+    --qcc-color-primary: #3b82f6;
+    --qcc-color-primary-dark: #2563eb;
+    --qcc-color-secondary: #6b7280;
+    --qcc-color-text: #374151;
+    --qcc-color-bg-light: #f9fafb;
+    --qcc-color-success-light: #dcfce7;
+    --qcc-color-error-light: #fee2e2;
+    --qcc-color-primary-light: #dbeafe;
+    --qcc-color-warning: #f59e0b;
+}
+
 .qcc-form-section {
-    background: var(--qcc-form-bg, #ffffff);
-    border-radius: var(--qcc-form-radius, 12px);
-    box-shadow: var(--qcc-form-shadow, 0 2px 12px rgba(0,0,0,0.08));
+    background: var(--qcc-form-bg);
+    border-radius: var(--qcc-form-radius);
+    box-shadow: var(--qcc-form-shadow);
     overflow: hidden;
+    margin: 20px 0;
 }
 
 .qcc-form-header {
     padding: 2rem 2rem 1rem;
-    border-bottom: 1px solid var(--qcc-color-border, #e5e7eb);
-    background: var(--qcc-form-header-bg, #f9fafb);
+    border-bottom: 1px solid var(--qcc-color-border);
+    background: var(--qcc-form-header-bg);
 }
 
 .qcc-form-title {
     font-size: 1.5rem;
     font-weight: 600;
     margin: 0 0 0.5rem;
-    color: var(--qcc-color-heading, #1f2937);
+    color: var(--qcc-color-heading);
 }
 
 .qcc-form-description {
     margin: 0;
-    color: var(--qcc-color-text-muted, #6b7280);
+    color: var(--qcc-color-text-muted);
     line-height: 1.6;
 }
 
 .qcc-validation-summary {
-    background: var(--qcc-color-error-bg, #fef2f2);
-    border: 1px solid var(--qcc-color-error-border, #fecaca);
+    background: var(--qcc-color-error-bg);
+    border: 1px solid var(--qcc-color-error-border);
     border-radius: 8px;
     padding: 1rem;
     margin-top: 1rem;
-    color: var(--qcc-color-error, #dc2626);
+    color: var(--qcc-color-error);
 }
 
 .qcc-calculator-form {
@@ -474,8 +793,8 @@ $form_classes = $helpers['build_css_classes'](
 /* Tab Layout */
 .qcc-form-tabs {
     display: flex;
-    background: var(--qcc-tab-bg, #f3f4f6);
-    border-bottom: 1px solid var(--qcc-color-border, #e5e7eb);
+    background: #f3f4f6;
+    border-bottom: 1px solid var(--qcc-color-border);
     overflow-x: auto;
 }
 
@@ -494,13 +813,13 @@ $form_classes = $helpers['build_css_classes'](
 }
 
 .qcc-tab-button:hover {
-    background: var(--qcc-tab-hover-bg, #e5e7eb);
+    background: #e5e7eb;
 }
 
 .qcc-tab-button--active {
-    background: var(--qcc-tab-active-bg, #ffffff);
-    border-bottom-color: var(--qcc-color-primary, #3b82f6);
-    color: var(--qcc-color-primary, #3b82f6);
+    background: #ffffff;
+    border-bottom-color: var(--qcc-color-primary);
+    color: var(--qcc-color-primary);
 }
 
 .qcc-tab-text {
@@ -526,21 +845,21 @@ $form_classes = $helpers['build_css_classes'](
 }
 
 .qcc-form-group[data-color="green"] {
-    border-left: 4px solid var(--qcc-color-success, #10b981);
+    border-left: 4px solid var(--qcc-color-success);
 }
 
 .qcc-form-group[data-color="red"] {
-    border-left: 4px solid var(--qcc-color-error, #ef4444);
+    border-left: 4px solid var(--qcc-color-error);
 }
 
 .qcc-form-group[data-color="blue"] {
-    border-left: 4px solid var(--qcc-color-primary, #3b82f6);
+    border-left: 4px solid var(--qcc-color-primary);
 }
 
 .qcc-group-header {
     margin-bottom: 1.5rem;
     padding: 1rem;
-    background: var(--qcc-group-header-bg, #f9fafb);
+    background: var(--qcc-form-header-bg);
     border-radius: 8px;
 }
 
@@ -550,7 +869,7 @@ $form_classes = $helpers['build_css_classes'](
 }
 
 .qcc-group-header--collapsible:hover {
-    background: var(--qcc-group-header-hover-bg, #f3f4f6);
+    background: #f3f4f6;
 }
 
 .qcc-group-title-row {
@@ -560,28 +879,28 @@ $form_classes = $helpers['build_css_classes'](
 }
 
 .qcc-group-icon {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
-    font-size: 1rem;
+    border-radius: 8px;
+    font-size: 1.2rem;
 }
 
 .qcc-group-icon--green {
-    background: var(--qcc-color-success-light, #dcfce7);
-    color: var(--qcc-color-success, #10b981);
+    background: var(--qcc-color-success-light);
+    color: var(--qcc-color-success);
 }
 
 .qcc-group-icon--red {
-    background: var(--qcc-color-error-light, #fee2e2);
-    color: var(--qcc-color-error, #ef4444);
+    background: var(--qcc-color-error-light);
+    color: var(--qcc-color-error);
 }
 
 .qcc-group-icon--blue {
-    background: var(--qcc-color-primary-light, #dbeafe);
-    color: var(--qcc-color-primary, #3b82f6);
+    background: var(--qcc-color-primary-light);
+    color: var(--qcc-color-primary);
 }
 
 .qcc-group-title {
@@ -589,7 +908,7 @@ $form_classes = $helpers['build_css_classes'](
     margin: 0;
     font-size: 1.125rem;
     font-weight: 600;
-    color: var(--qcc-color-heading, #1f2937);
+    color: var(--qcc-color-heading);
 }
 
 .qcc-group-optional {
@@ -611,7 +930,7 @@ $form_classes = $helpers['build_css_classes'](
 .qcc-group-description {
     margin: 0.5rem 0 0;
     font-size: 0.875rem;
-    color: var(--qcc-color-text-muted, #6b7280);
+    color: var(--qcc-color-text-muted);
     line-height: 1.5;
 }
 
@@ -629,10 +948,95 @@ $form_classes = $helpers['build_css_classes'](
     grid-column: span 2;
 }
 
+/* Input Fields */
+.qcc-input-field {
+    width: 100%;
+}
+
+.qcc-field-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--qcc-color-heading);
+    font-size: 0.875rem;
+}
+
+.qcc-required {
+    color: var(--qcc-color-error);
+    margin-left: 0.25rem;
+}
+
+.qcc-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.qcc-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--qcc-color-border);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    background: white;
+}
+
+.qcc-input:focus {
+    outline: none;
+    border-color: var(--qcc-color-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.qcc-input:invalid {
+    border-color: var(--qcc-color-error);
+}
+
+.qcc-input-prefix,
+.qcc-input-suffix {
+    position: absolute;
+    font-weight: 500;
+    color: var(--qcc-color-text-muted);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.qcc-input-prefix {
+    left: 1rem;
+}
+
+.qcc-input-suffix {
+    right: 1rem;
+}
+
+.qcc-input:has(~ .qcc-input-prefix) {
+    padding-left: 2.5rem;
+}
+
+.qcc-input:has(~ .qcc-input-suffix) {
+    padding-right: 2.5rem;
+}
+
+.qcc-field-help {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--qcc-color-text-muted);
+    line-height: 1.4;
+}
+
+.qcc-field-validation {
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--qcc-color-error);
+    font-size: 0.75rem;
+}
+
 .qcc-percentage-total {
     grid-column: 1 / -1;
-    background: var(--qcc-percentage-total-bg, #f8fafc);
-    border: 2px solid var(--qcc-color-border, #e5e7eb);
+    background: #f8fafc;
+    border: 2px solid var(--qcc-color-border);
     border-radius: 8px;
     padding: 1rem;
     margin-top: 1rem;
@@ -647,7 +1051,8 @@ $form_classes = $helpers['build_css_classes'](
 }
 
 .qcc-percentage-total-value {
-    color: var(--qcc-color-primary, #3b82f6);
+    color: var(--qcc-color-primary);
+    font-size: 1.25rem;
 }
 
 .qcc-percentage-validation {
@@ -655,7 +1060,7 @@ $form_classes = $helpers['build_css_classes'](
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--qcc-color-warning, #f59e0b);
+    color: var(--qcc-color-warning);
     font-size: 0.875rem;
 }
 
@@ -665,8 +1070,8 @@ $form_classes = $helpers['build_css_classes'](
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem 2rem;
-    border-top: 1px solid var(--qcc-color-border, #e5e7eb);
-    background: var(--qcc-form-footer-bg, #f9fafb);
+    border-top: 1px solid var(--qcc-color-border);
+    background: var(--qcc-form-header-bg);
 }
 
 .qcc-form-actions-left,
@@ -687,30 +1092,40 @@ $form_classes = $helpers['build_css_classes'](
     cursor: pointer;
     transition: all 0.2s ease;
     border: 1px solid transparent;
+    font-size: 0.875rem;
 }
 
 .qcc-button--primary {
-    background: var(--qcc-color-primary, #3b82f6);
+    background: var(--qcc-color-primary);
     color: white;
+    border-color: var(--qcc-color-primary);
 }
 
 .qcc-button--primary:hover {
-    background: var(--qcc-color-primary-dark, #2563eb);
+    background: var(--qcc-color-primary-dark);
+    border-color: var(--qcc-color-primary-dark);
 }
 
 .qcc-button--secondary {
-    background: var(--qcc-color-secondary, #6b7280);
+    background: var(--qcc-color-secondary);
     color: white;
+    border-color: var(--qcc-color-secondary);
+}
+
+.qcc-button--secondary:hover {
+    background: #4b5563;
+    border-color: #4b5563;
 }
 
 .qcc-button--outline {
     background: transparent;
-    border-color: var(--qcc-color-border, #e5e7eb);
-    color: var(--qcc-color-text, #374151);
+    border-color: var(--qcc-color-border);
+    color: var(--qcc-color-text);
 }
 
 .qcc-button--outline:hover {
-    background: var(--qcc-color-bg-light, #f9fafb);
+    background: var(--qcc-color-bg-light);
+    border-color: var(--qcc-color-primary);
 }
 
 .qcc-auto-calculate-info {
@@ -718,7 +1133,10 @@ $form_classes = $helpers['build_css_classes'](
     align-items: center;
     gap: 0.5rem;
     font-size: 0.875rem;
-    color: var(--qcc-color-success, #10b981);
+    color: var(--qcc-color-success);
+    background: var(--qcc-color-success-light);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
 }
 
 .qcc-spinner {
@@ -747,8 +1165,8 @@ $form_classes = $helpers['build_css_classes'](
         grid-template-columns: 1fr;
     }
     
-    .qcc-field-wrapper--currency[data-field="revenue"] {
-        grid-column: span 1;
+    .qcc-field-wrapper--currency {
+        grid-column: span 1 !important;
     }
     
     .qcc-form-actions {
@@ -772,15 +1190,103 @@ $form_classes = $helpers['build_css_classes'](
     .qcc-tab-text {
         font-size: 0.875rem;
     }
+    
+    .qcc-form-title {
+        font-size: 1.25rem;
+    }
 }
 </style>
 
-<?php if ($debug['debug_mode'] ?? false): ?>
+<!-- Basic JavaScript Functions -->
+<script>
+if (typeof QCC === 'undefined') {
+    window.QCC = {};
+}
+
+QCC.handleFormSubmit = function(event) {
+    event.preventDefault();
+    console.log('QCC: Form submitted');
+    return false;
+};
+
+QCC.switchTab = function(sectionKey) {
+    // Hide all tab panels
+    const panels = document.querySelectorAll('[id^="qcc-tab-panel-"]');
+    panels.forEach(panel => {
+        panel.classList.add('qcc-form-group--hidden');
+    });
+    
+    // Show selected panel
+    const targetPanel = document.getElementById('qcc-tab-panel-' + sectionKey);
+    if (targetPanel) {
+        targetPanel.classList.remove('qcc-form-group--hidden');
+    }
+    
+    // Update tab buttons
+    const buttons = document.querySelectorAll('.qcc-tab-button');
+    buttons.forEach(button => {
+        button.classList.remove('qcc-tab-button--active');
+        button.setAttribute('aria-selected', 'false');
+    });
+    
+    const activeButton = document.querySelector('[aria-controls="qcc-tab-panel-' + sectionKey + '"]');
+    if (activeButton) {
+        activeButton.classList.add('qcc-tab-button--active');
+        activeButton.setAttribute('aria-selected', 'true');
+    }
+    
+    console.log('QCC: Switched to tab', sectionKey);
+};
+
+QCC.toggleSection = function(sectionKey) {
+    const fields = document.getElementById('qcc-fields-' + sectionKey);
+    const header = document.querySelector('[onclick*="' + sectionKey + '"]');
+    
+    if (fields && header) {
+        if (fields.style.display === 'none') {
+            fields.style.display = 'grid';
+            header.classList.remove('qcc-group-header--collapsed');
+        } else {
+            fields.style.display = 'none';
+            header.classList.add('qcc-group-header--collapsed');
+        }
+    }
+    
+    console.log('QCC: Toggled section', sectionKey);
+};
+
+QCC.resetForm = function() {
+    const form = document.getElementById('qcc-calculator-form');
+    if (form) {
+        form.reset();
+        console.log('QCC: Form reset');
+    }
+};
+
+QCC.saveForm = function() {
+    console.log('QCC: Save form function called');
+    // Implement save functionality
+};
+
+QCC.validateField = function(field) {
+    console.log('QCC: Validating field', field.name);
+    // Implement field validation
+};
+
+QCC.handleFieldInput = function(field) {
+    console.log('QCC: Field input', field.name, field.value);
+    // Implement live input handling
+};
+
+console.log('QCC: Form section JavaScript loaded');
+</script>
+
+<?php if (WP_DEBUG || (defined('QCC_DEBUG') && QCC_DEBUG)): ?>
 <!-- Debug Information -->
 <div class="qcc-debug-info" style="margin-top: 20px; padding: 10px; background: #f0f0f0; border: 1px solid #ccc; font-family: monospace; font-size: 12px;">
     <details>
-        <summary>🐛 QCC Form Section Debug Info</summary>
-        <pre><?php echo $helpers['escape'](print_r(array(
+        <summary>🛠️ QCC Form Section Debug Info</summary>
+        <pre><?php echo esc_html(print_r(array(
             'template' => 'sections/form-section',
             'section_id' => $section_id,
             'layout' => $layout,
@@ -790,76 +1296,14 @@ $form_classes = $helpers['build_css_classes'](
             'sections_count' => count($form_sections),
             'fields_count' => count($field_definitions),
             'default_values' => $default_values,
+            'debug_function_available' => function_exists('qcc_debug_translate'),
+            'sample_translations' => array(
+                'cogq_title' => qcc_debug_translate('cogq_title', 'de'),
+                'copq_title' => qcc_debug_translate('copq_title', 'de'),
+                'prevention_costs' => qcc_debug_translate('prevention_costs', 'de')
+            ),
             'timestamp' => date('Y-m-d H:i:s')
         ), true)); ?></pre>
     </details>
 </div>
 <?php endif; ?>
-
-<?php
-/**
- * Template-Dokumentation:
- * 
- * Erforderliche Daten:
- * - Keine (verwendet intelligente Defaults)
- * 
- * Optionale Daten:
- * - $data['title'] - Section-Titel
- * - $data['description'] - Section-Beschreibung
- * - $data['layout'] - Layout-Typ (vertical, horizontal, tabs)
- * - $data['validation_mode'] - Validierung (live, submit, manual)
- * - $data['currency'] - Aktuelle Währung
- * - $data['unit'] - Aktuelle Einheit (millions, billions)
- * - $data['default_values'] - Standard-Werte für Felder
- * - $data['values'] - Aktuelle Werte für Felder
- * - $data['sections'] - Custom Section-Konfiguration
- * - $data['auto_calculate'] - Auto-Berechnung aktiviert
- * - $data['show_reset'] - Reset-Button anzeigen
- * - $data['show_save'] - Save-Button anzeigen
- * - $data['style'] - Form-Style (default, modern, compact)
- * 
- * Form-Sections:
- * - basic - Revenue und Quality Percentage
- * - cogq - Prevention und Appraisal Costs
- * - copq - Internal und External Defect Costs
- * - opportunity - Lost Sales, Customer Churn, etc.
- * 
- * Field-Types:
- * - currency - Währungs-Eingabe mit Symbol
- * - percentage - Prozent-Eingabe mit Validation
- * 
- * CSS-Klassen:
- * - .qcc-form-section - Basis-Form-Section
- * - .qcc-form-group - Section-Gruppe
- * - .qcc-group-header - Gruppen-Header
- * - .qcc-group-fields - Felder-Container
- * - .qcc-percentage-total - Prozent-Summen-Anzeige
- * - .qcc-form-actions - Aktions-Buttons
- * 
- * JavaScript-Integration:
- * - QCC.handleFormSubmit(event) - Form-Submit-Handler
- * - QCC.switchTab(sectionKey) - Tab-Wechsel
- * - QCC.toggleSection(sectionKey) - Section ein-/ausklappen
- * - QCC.resetForm() - Formular zurücksetzen
- * - QCC.saveForm() - Formular speichern
- * 
- * Validation:
- * - Live-Validation für Prozent-Summen
- * - Required-Field-Validation
- * - Range-Validation für Min/Max-Werte
- * - Custom Validation-Rules
- * 
- * Accessibility:
- * - role="region" für Section
- * - role="tablist/tab/tabpanel" für Tabs
- * - aria-live für dynamische Inhalte
- * - Keyboard-Navigation-Support
- * - Screen-Reader-Labels
- * 
- * Performance:
- * - Template-Caching automatisch
- * - Conditional Rendering für optionale Bereiche
- * - Optimized DOM-Struktur
- * - CSS Grid für responsive Layout
- */
-?>
